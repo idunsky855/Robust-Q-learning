@@ -1,0 +1,109 @@
+"""Main project pipeline."""
+
+from __future__ import annotations
+
+from dataclasses import asdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+from ears_q_learning.config import Config
+from ears_q_learning.data import validate_raw_snapshot
+from ears_q_learning.mdp import annual_state_distributions, estimate_reward_bands, myopic_policy, normalized_hamming_cost, transition_kernel
+from ears_q_learning.preprocessing import (
+    build_country_year_panel,
+    build_transition_records,
+    eligible_countries,
+    filter_rows_by_country,
+    split_rows_by_period,
+)
+from ears_q_learning.reproducibility import build_run_metadata, ensure_directory, set_global_seed, write_json
+from ears_q_learning.state_space import encode_state, fit_thresholds
+
+
+def _run_directory(results_dir: Path) -> Path:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return ensure_directory(results_dir / timestamp)
+
+
+def run_pipeline(config: Config) -> dict[str, object]:
+    """Run the first reproducible project slice.
+
+    This scaffold validates the raw snapshot, derives the analysis-ready state
+    space, estimates the action-independent kernel, and writes deterministic
+    metadata. Full tuning and evaluation are added in later slices.
+    """
+    set_global_seed(config.project.random_seed)
+    ensure_directory(config.paths.processed_dir)
+    run_dir = _run_directory(config.paths.results_dir)
+    metadata = build_run_metadata(config, run_dir)
+    write_json(run_dir / "run_metadata.json", metadata)
+
+    if not config.paths.raw_snapshot.exists():
+        placeholder = {
+            "status": "blocked_missing_raw_snapshot",
+            "message": (
+                "The raw EARS-Net snapshot is not present yet. Place the exported CSV "
+                "at the configured path and rerun the pipeline."
+            ),
+            "expected_path": str(config.paths.raw_snapshot),
+            "expected_metadata_path": str(config.paths.raw_snapshot_metadata),
+        }
+        write_json(run_dir / "status.json", placeholder)
+        return placeholder
+
+    records = validate_raw_snapshot(
+        path=config.paths.raw_snapshot,
+        organism=config.data.organism,
+        year_start=config.data.training_year_start,
+        year_end=config.data.evaluation_year_end,
+    )
+    rows = build_country_year_panel(records)
+    countries = eligible_countries(
+        rows=rows,
+        training_year_end=config.data.training_year_end,
+        evaluation_year_start=config.data.evaluation_year_start,
+        minimum_training_transitions=config.data.minimum_training_transitions,
+        minimum_evaluation_transitions=config.data.minimum_evaluation_transitions,
+    )
+    filtered_rows = filter_rows_by_country(rows, countries)
+    training_rows, evaluation_rows = split_rows_by_period(
+        filtered_rows,
+        training_year_end=config.data.training_year_end,
+        evaluation_year_end=config.data.evaluation_year_end,
+    )
+    thresholds = fit_thresholds(training_rows)
+    state_lookup = {
+        (row.country, row.year): encode_state(row, thresholds) for row in filtered_rows
+    }
+    transitions = build_transition_records(
+        rows=filtered_rows,
+        state_lookup=state_lookup,
+        weighting=config.data.weighting,
+    )
+    kernel = transition_kernel(transitions, config.data.smoothing_gamma)
+    reward_bands = estimate_reward_bands(
+        training_rows=training_rows,
+        state_lookup=state_lookup,
+        carbapenem_penalty=config.data.carbapenem_penalty,
+    )
+    state_distributions = annual_state_distributions(training_rows, state_lookup)
+    summary = {
+        "status": "scaffold_completed",
+        "validated_record_count": len(records),
+        "country_year_count": len(filtered_rows),
+        "eligible_country_count": len(countries),
+        "training_country_year_count": len(training_rows),
+        "evaluation_country_year_count": len(evaluation_rows),
+        "thresholds": asdict(thresholds),
+        "reward_bands": reward_bands,
+        "myopic_policy": myopic_policy(kernel, reward_bands).tolist(),
+        "training_years": sorted({row.year for row in training_rows}),
+        "state_distributions": {
+            str(year): distribution.tolist()
+            for year, distribution in state_distributions.items()
+        },
+        "cost_matrix": normalized_hamming_cost().tolist(),
+    }
+    write_json(config.paths.processed_dir / "scaffold_summary.json", summary)
+    write_json(run_dir / "status.json", summary)
+    return summary
