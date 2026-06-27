@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+import numpy as np
+
+from ears_q_learning.learning import train_q_learning
+from ears_q_learning.mdp import myopic_policy, normalized_hamming_cost
+
+
+def test_classical_q_learning_matches_myopic_policy_in_action_independent_case() -> None:
+    kernel = np.zeros((8, 8), dtype=float)
+    kernel[:, 0] = 0.25
+    kernel[:, 1] = 0.75
+    reward_bands = {
+        "3gc": {0: 0.9, 1: 0.2},
+        "fq": {0: 0.7, 1: 0.4},
+        "carb": {0: 0.5, 1: 0.3},
+    }
+    learned = train_q_learning(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.45,
+        exploration_rate=0.1,
+        updates=30000,
+        seed=7,
+        robust_epsilon=0.0,
+        cost_matrix=normalized_hamming_cost(),
+    )
+    expected = myopic_policy(kernel, reward_bands)
+    assert np.array_equal(learned.greedy_policy, expected)
+
+
+def test_training_is_deterministic_for_identical_seed() -> None:
+    kernel = np.full((8, 8), 1.0 / 8.0, dtype=float)
+    reward_bands = {
+        "3gc": {0: 0.8, 1: 0.1},
+        "fq": {0: 0.7, 1: 0.2},
+        "carb": {0: 0.6, 1: 0.3},
+    }
+    kwargs = dict(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.3,
+        exploration_rate=0.1,
+        updates=5000,
+        seed=19,
+        robust_epsilon=0.05,
+        cost_matrix=normalized_hamming_cost(),
+    )
+    first = train_q_learning(**kwargs)
+    second = train_q_learning(**kwargs)
+    assert np.allclose(first.q_values, second.q_values)
