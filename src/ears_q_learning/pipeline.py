@@ -14,6 +14,7 @@ from ears_q_learning.data import (
 )
 from ears_q_learning.mdp import (
     annual_state_distributions,
+    calibrate_wasserstein_radius,
     estimate_reward_bands,
     myopic_policy,
     normalized_hamming_cost,
@@ -132,7 +133,7 @@ def run_pipeline(config: Config) -> dict[str, object]:
         },
     )
     transitions = build_transition_records(
-        rows=filtered_rows,
+        rows=training_rows,
         state_lookup=state_lookup,
         weighting=config.data.weighting,
     )
@@ -143,6 +144,30 @@ def run_pipeline(config: Config) -> dict[str, object]:
         carbapenem_penalty=config.data.carbapenem_penalty,
     )
     state_distributions = annual_state_distributions(training_rows, state_lookup)
+    cost_matrix = normalized_hamming_cost()
+    drift_calibration = calibrate_wasserstein_radius(
+        state_distributions,
+        cost_matrix,
+    )
+    epsilon_star = float(drift_calibration["epsilon_star"])
+    transition_model = {
+        "action_independent": True,
+        "smoothing_gamma": config.data.smoothing_gamma,
+        "reference_kernel": kernel.tolist(),
+        "annual_state_distributions": {
+            str(year): distribution.tolist()
+            for year, distribution in state_distributions.items()
+        },
+        **drift_calibration,
+        "robustness_radii": [
+            multiplier * epsilon_star
+            for multiplier in config.learning.epsilon_multipliers
+        ],
+    }
+    write_json(
+        config.paths.processed_dir / "transition_model.json",
+        transition_model,
+    )
     summary = {
         "status": "scaffold_completed",
         "validated_record_count": len(records),
@@ -154,11 +179,8 @@ def run_pipeline(config: Config) -> dict[str, object]:
         "reward_bands": reward_bands,
         "myopic_policy": myopic_policy(kernel, reward_bands).tolist(),
         "training_years": sorted({row.year for row in training_rows}),
-        "state_distributions": {
-            str(year): distribution.tolist()
-            for year, distribution in state_distributions.items()
-        },
-        "cost_matrix": normalized_hamming_cost().tolist(),
+        "transition_model": transition_model,
+        "cost_matrix": cost_matrix.tolist(),
     }
     write_json(config.paths.processed_dir / "scaffold_summary.json", summary)
     write_json(run_dir / "status.json", summary)

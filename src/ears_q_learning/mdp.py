@@ -9,6 +9,7 @@ import numpy as np
 from ears_q_learning.constants import ACTION_INDEX, STATE_COUNT
 from ears_q_learning.state_space import state_to_bits
 from ears_q_learning.types import CountryYearRow, TransitionRecord
+from ears_q_learning.wasserstein import wasserstein_distance
 
 
 def normalized_hamming_cost() -> np.ndarray:
@@ -56,19 +57,26 @@ def transition_kernel(
     transitions: list[TransitionRecord],
     smoothing_gamma: float,
 ) -> np.ndarray:
-    """Estimate and smooth the action-independent transition kernel."""
+    """Estimate and uniformly smooth the action-independent transition kernel."""
+    if not 0.0 <= smoothing_gamma <= 1.0:
+        raise ValueError("Smoothing gamma must be between zero and one.")
     counts = np.zeros((STATE_COUNT, STATE_COUNT), dtype=float)
     totals = np.zeros(STATE_COUNT, dtype=float)
     for transition in transitions:
+        if transition.weight < 0:
+            raise ValueError("Transition weights must be non-negative.")
         counts[transition.current_state, transition.next_state] += transition.weight
         totals[transition.current_state] += transition.weight
     kernel = np.zeros_like(counts)
     for state in range(STATE_COUNT):
-        denominator = totals[state] + smoothing_gamma
-        if denominator == 0:
+        if totals[state] == 0:
             kernel[state, :] = 1.0 / STATE_COUNT
         else:
-            kernel[state, :] = (counts[state, :] + smoothing_gamma / STATE_COUNT) / denominator
+            empirical = counts[state, :] / totals[state]
+            kernel[state, :] = (
+                (1.0 - smoothing_gamma) * empirical
+                + smoothing_gamma / STATE_COUNT
+            )
     return kernel
 
 
@@ -84,6 +92,39 @@ def annual_state_distributions(rows: list[CountryYearRow], state_lookup: dict[tu
             values[state] += 1.0
         distributions[year] = values / values.sum()
     return distributions
+
+
+def calibrate_wasserstein_radius(
+    annual_distributions: dict[int, np.ndarray],
+    cost_matrix: np.ndarray,
+) -> dict[str, object]:
+    """Calibrate epsilon from consecutive training-year state distributions."""
+    annual_distances: list[dict[str, int | float]] = []
+    years = sorted(annual_distributions)
+    for from_year, to_year in zip(years, years[1:]):
+        if to_year != from_year + 1:
+            continue
+        distance = wasserstein_distance(
+            annual_distributions[from_year],
+            annual_distributions[to_year],
+            cost_matrix,
+        )
+        annual_distances.append(
+            {
+                "from_year": from_year,
+                "to_year": to_year,
+                "distance": distance,
+            }
+        )
+    if not annual_distances:
+        raise ValueError("At least two consecutive annual distributions are required.")
+    epsilon_star = float(
+        np.median([entry["distance"] for entry in annual_distances])
+    )
+    return {
+        "annual_distances": annual_distances,
+        "epsilon_star": epsilon_star,
+    }
 
 
 def state_action_reward(next_state: int, action_code: str, reward_bands: dict[str, dict[int, float]]) -> float:

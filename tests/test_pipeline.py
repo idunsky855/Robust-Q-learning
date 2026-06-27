@@ -224,3 +224,12 @@ def test_pipeline_writes_preprocessing_artifacts_when_inputs_exist(tmp_path: Pat
     processed_dir = tmp_path / "data" / "processed"
     assert (processed_dir / "preprocessing_report.json").exists()
     assert (processed_dir / "state_assignments.json").exists()
+    transition_model = json.loads(
+        (processed_dir / "transition_model.json").read_text(encoding="utf-8")
+    )
+    assert transition_model["action_independent"] is True
+    assert len(transition_model["annual_distances"]) == 4
+    assert all(
+        abs(sum(row) - 1.0) < 1e-12
+        for row in transition_model["reference_kernel"]
+    )
