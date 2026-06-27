@@ -1,0 +1,60 @@
+project:
+  name: "EARS-Net Q-Learning: Robust Antibiotic Selection Under Resistance Drift"
+  random_seed: 20260627
+
+paths:
+  raw_snapshot: "data/raw/ears_net_ecoli_2015_2024.csv"
+  raw_snapshot_metadata: "data/raw/ears_net_ecoli_2015_2024.metadata.json"
+  processed_dir: "data/processed"
+  results_dir: "results"
+
+data:
+  organism: "Escherichia coli"
+  training_year_start: 2015
+  training_year_end: 2019
+  evaluation_year_start: 2020
+  evaluation_year_end: 2024
+  minimum_training_transitions: 3
+  minimum_evaluation_transitions: 2
+  carbapenem_penalty: 0.10
+  smoothing_gamma: 0.10
+  weighting: "equal"
+
+learning:
+  discount_grid: [0.3, 0.45, 0.7, 0.9]
+  exploration_grid: [0.05, 0.1, 0.2]
+  updates: 50000
+  q_norm: 1
+  epsilon_multipliers: [0.5, 1.0, 1.5, 2.0]
+  tuning_seeds: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
+  final_seeds:
+    - 201
+    - 202
+    - 203
+    - 204
+    - 205
+    - 206
+    - 207
+    - 208
+    - 209
+    - 210
+    - 211
+    - 212
+    - 213
+    - 214
+    - 215
+    - 216
+    - 217
+    - 218
+    - 219
+    - 220
+    - 221
+    - 222
+    - 223
+    - 224
+    - 225
+    - 226
+    - 227
+    - 228
+    - 229
+    - 230

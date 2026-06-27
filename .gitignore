@@ -1,0 +1,40 @@
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local environment files
+.env
+
+# Data artifacts
+data/raw/*
+data/processed/*
+results/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!results/.gitkeep
+
+# Operating system files
+Thumbs.db
+Desktop.ini
+
+# Editor settings
+.vscode/
+.idea/
+
+# Code artifacts
+.codex/
+.agents/
+.scratch/
+docs/adr/
+CONTEXT.md
+docs/Robust Q-learning algorithm for Markov decision processes under Wasserstein uncertainty.pdf
+docs/project_plan.md
+docs/data_snapshot_template.md
+docs/implementation_prd.md
+docs/reproducibility.md
