@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from collections import defaultdict
 
 from ears_q_learning.types import CountryYearRow, RawRecord, TransitionRecord
@@ -32,6 +33,34 @@ def build_country_year_panel(records: list[RawRecord]) -> list[CountryYearRow]:
     return rows
 
 
+def count_complete_transitions(
+    rows: list[CountryYearRow],
+    training_year_end: int,
+    evaluation_year_start: int,
+) -> dict[str, dict[str, int]]:
+    """Count complete training and evaluation transitions for each country."""
+    by_country: dict[str, list[int]] = defaultdict(list)
+    for row in rows:
+        by_country[row.country].append(row.year)
+
+    counts: dict[str, dict[str, int]] = {}
+    for country, years in sorted(by_country.items()):
+        present = set(years)
+        counts[country] = {
+            "training_transitions": sum(
+                1
+                for year in range(min(present), training_year_end)
+                if year in present and (year + 1) in present
+            ),
+            "evaluation_transitions": sum(
+                1
+                for year in range(evaluation_year_start, max(present))
+                if year in present and (year + 1) in present
+            ),
+        }
+    return counts
+
+
 def split_rows_by_period(
     rows: list[CountryYearRow],
     training_year_end: int,
@@ -55,25 +84,16 @@ def eligible_countries(
     minimum_evaluation_transitions: int,
 ) -> set[str]:
     """Return countries satisfying the transition completeness rules."""
-    by_country: dict[str, list[int]] = defaultdict(list)
-    for row in rows:
-        by_country[row.country].append(row.year)
+    transition_counts = count_complete_transitions(
+        rows=rows,
+        training_year_end=training_year_end,
+        evaluation_year_start=evaluation_year_start,
+    )
     eligible: set[str] = set()
-    for country, years in by_country.items():
-        present = set(years)
-        training_transitions = sum(
-            1
-            for year in range(min(present), training_year_end)
-            if year in present and (year + 1) in present
-        )
-        evaluation_transitions = sum(
-            1
-            for year in range(evaluation_year_start, max(present))
-            if year in present and (year + 1) in present
-        )
+    for country, counts in transition_counts.items():
         if (
-            training_transitions >= minimum_training_transitions
-            and evaluation_transitions >= minimum_evaluation_transitions
+            counts["training_transitions"] >= minimum_training_transitions
+            and counts["evaluation_transitions"] >= minimum_evaluation_transitions
         ):
             eligible.add(country)
     return eligible
@@ -82,6 +102,48 @@ def eligible_countries(
 def filter_rows_by_country(rows: list[CountryYearRow], countries: set[str]) -> list[CountryYearRow]:
     """Filter country-year rows to the chosen countries."""
     return [row for row in rows if row.country in countries]
+
+
+def build_preprocessing_report(
+    rows: list[CountryYearRow],
+    eligible: set[str],
+    training_year_end: int,
+    evaluation_year_start: int,
+    minimum_training_transitions: int,
+    minimum_evaluation_transitions: int,
+) -> dict[str, object]:
+    """Build a machine-readable report for country eligibility and coverage."""
+    transition_counts = count_complete_transitions(
+        rows=rows,
+        training_year_end=training_year_end,
+        evaluation_year_start=evaluation_year_start,
+    )
+    return {
+        "status": "country_year_panel_built",
+        "country_year_row_count": len(rows),
+        "country_count": len({row.country for row in rows}),
+        "eligible_country_count": len(eligible),
+        "eligible_countries": sorted(eligible),
+        "minimum_training_transitions": minimum_training_transitions,
+        "minimum_evaluation_transitions": minimum_evaluation_transitions,
+        "transition_counts": transition_counts,
+    }
+
+
+def build_state_assignment_rows(
+    rows: list[CountryYearRow],
+    state_lookup: dict[tuple[str, int], int],
+) -> list[dict[str, object]]:
+    """Build export-ready state-assignment rows."""
+    assignments: list[dict[str, object]] = []
+    for row in rows:
+        assignments.append(
+            {
+                **asdict(row),
+                "state": state_lookup[(row.country, row.year)],
+            }
+        )
+    return assignments
 
 
 def build_transition_records(

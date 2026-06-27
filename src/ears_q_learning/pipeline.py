@@ -21,6 +21,8 @@ from ears_q_learning.mdp import (
 )
 from ears_q_learning.preprocessing import (
     build_country_year_panel,
+    build_preprocessing_report,
+    build_state_assignment_rows,
     build_transition_records,
     eligible_countries,
     filter_rows_by_country,
@@ -100,6 +102,18 @@ def run_pipeline(config: Config) -> dict[str, object]:
         minimum_training_transitions=config.data.minimum_training_transitions,
         minimum_evaluation_transitions=config.data.minimum_evaluation_transitions,
     )
+    preprocessing_report = build_preprocessing_report(
+        rows=rows,
+        eligible=countries,
+        training_year_end=config.data.training_year_end,
+        evaluation_year_start=config.data.evaluation_year_start,
+        minimum_training_transitions=config.data.minimum_training_transitions,
+        minimum_evaluation_transitions=config.data.minimum_evaluation_transitions,
+    )
+    write_json(
+        config.paths.processed_dir / "preprocessing_report.json",
+        preprocessing_report,
+    )
     filtered_rows = filter_rows_by_country(rows, countries)
     training_rows, evaluation_rows = split_rows_by_period(
         filtered_rows,
@@ -110,6 +124,13 @@ def run_pipeline(config: Config) -> dict[str, object]:
     state_lookup = {
         (row.country, row.year): encode_state(row, thresholds) for row in filtered_rows
     }
+    write_json(
+        config.paths.processed_dir / "state_assignments.json",
+        {
+            "thresholds": asdict(thresholds),
+            "rows": build_state_assignment_rows(filtered_rows, state_lookup),
+        },
+    )
     transitions = build_transition_records(
         rows=filtered_rows,
         state_lookup=state_lookup,
