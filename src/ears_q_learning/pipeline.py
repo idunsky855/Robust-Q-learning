@@ -7,8 +7,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ears_q_learning.config import Config
-from ears_q_learning.data import validate_raw_snapshot
-from ears_q_learning.mdp import annual_state_distributions, estimate_reward_bands, myopic_policy, normalized_hamming_cost, transition_kernel
+from ears_q_learning.data import (
+    build_snapshot_validation_report,
+    validate_raw_snapshot,
+    validate_snapshot_metadata,
+)
+from ears_q_learning.mdp import (
+    annual_state_distributions,
+    estimate_reward_bands,
+    myopic_policy,
+    normalized_hamming_cost,
+    transition_kernel,
+)
 from ears_q_learning.preprocessing import (
     build_country_year_panel,
     build_transition_records,
@@ -51,12 +61,37 @@ def run_pipeline(config: Config) -> dict[str, object]:
         write_json(run_dir / "status.json", placeholder)
         return placeholder
 
+    if not config.paths.raw_snapshot_metadata.exists():
+        placeholder = {
+            "status": "blocked_missing_raw_snapshot_metadata",
+            "message": (
+                "The raw EARS-Net snapshot exists, but the required metadata sidecar "
+                "is missing. Add the JSON provenance file and rerun the pipeline."
+            ),
+            "snapshot_path": str(config.paths.raw_snapshot),
+            "expected_metadata_path": str(config.paths.raw_snapshot_metadata),
+        }
+        write_json(run_dir / "status.json", placeholder)
+        return placeholder
+
+    metadata_payload = validate_snapshot_metadata(
+        snapshot_path=config.paths.raw_snapshot,
+        metadata_path=config.paths.raw_snapshot_metadata,
+    )
+
     records = validate_raw_snapshot(
         path=config.paths.raw_snapshot,
         organism=config.data.organism,
         year_start=config.data.training_year_start,
         year_end=config.data.evaluation_year_end,
     )
+    snapshot_report = build_snapshot_validation_report(
+        records=records,
+        metadata=metadata_payload,
+        year_start=config.data.training_year_start,
+        year_end=config.data.evaluation_year_end,
+    )
+    write_json(config.paths.processed_dir / "raw_snapshot_report.json", snapshot_report)
     rows = build_country_year_panel(records)
     countries = eligible_countries(
         rows=rows,

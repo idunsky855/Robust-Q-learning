@@ -85,5 +85,17 @@ def sample_raw_csv(tmp_path: Path) -> Path:
 @pytest.fixture()
 def sample_metadata_json(tmp_path: Path) -> Path:
     path = tmp_path / "sample.metadata.json"
-    path.write_text(json.dumps({"source_url": "https://example.test"}), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "source_url": "https://example.test",
+                "retrieval_date": "2026-06-27",
+                "selected_filters": {
+                    "pathogen": "Escherichia coli",
+                    "years": "2015-2024",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     return path

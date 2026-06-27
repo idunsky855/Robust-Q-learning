@@ -54,6 +54,15 @@ python -m ears_q_learning run --config configs/primary.yaml
 
 If the raw EARS-Net CSV has not yet been placed in `data/raw/`, the command writes a machine-readable blocked status instead of failing silently. Once the snapshot exists, the scaffold validates the raw file and writes summary artifacts for the first modeling slice.
 
+## Raw Snapshot Workflow
+
+1. Export one EARS-Net CSV covering *Escherichia coli*, 2015 through 2024, resistance percentages, and tested-isolate counts for third-generation cephalosporins, fluoroquinolones, and carbapenems.
+2. Place the CSV at `data/raw/ears_net_ecoli_2015_2024.csv` without editing the file contents.
+3. Create the JSON provenance sidecar at `data/raw/ears_net_ecoli_2015_2024.metadata.json` with the source URL, retrieval date, selected filters, and checksum.
+4. Run `python -m ears_q_learning run --config configs/primary.yaml`.
+
+The pipeline now requires both the raw CSV and the metadata sidecar. When they are present, it writes a machine-readable `raw_snapshot_report.json` intake report before any modeling logic proceeds.
+
 ## Data Basis
 
 The intended raw input is one EARS-Net export covering *E. coli* resistance percentages and tested-isolate counts for:

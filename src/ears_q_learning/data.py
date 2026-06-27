@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from collections import Counter
 from pathlib import Path
 from typing import Iterable
@@ -31,6 +32,12 @@ CANONICAL_COLUMNS = {
         "n",
     ),
 }
+
+REQUIRED_METADATA_FIELDS = (
+    "source_url",
+    "retrieval_date",
+    "selected_filters",
+)
 
 
 def _normalize(text: str) -> str:
@@ -112,6 +119,66 @@ def validate_raw_snapshot(
             f"Examples: {duplicates[:3]}"
         )
     return records
+
+
+def load_snapshot_metadata(path: Path) -> dict[str, object]:
+    """Load raw-snapshot metadata from a JSON sidecar."""
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise ValueError("Snapshot metadata must be a JSON object.")
+    return payload
+
+
+def validate_snapshot_metadata(
+    snapshot_path: Path,
+    metadata_path: Path,
+) -> dict[str, object]:
+    """Validate raw-snapshot provenance metadata."""
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            "The raw snapshot metadata file is missing. "
+            f"Expected: {metadata_path}"
+        )
+    payload = load_snapshot_metadata(metadata_path)
+    for field in REQUIRED_METADATA_FIELDS:
+        if field not in payload:
+            raise ValueError(f"Snapshot metadata is missing '{field}'.")
+    if not isinstance(payload["selected_filters"], dict):
+        raise ValueError("Snapshot metadata field 'selected_filters' must be an object.")
+    checksum = sha256_file(snapshot_path)
+    recorded_checksum = payload.get("sha256")
+    if recorded_checksum is not None and recorded_checksum != checksum:
+        raise ValueError(
+            "Snapshot metadata checksum does not match the current raw file. "
+            f"Recorded: {recorded_checksum}; current: {checksum}."
+        )
+    validated = dict(payload)
+    validated["sha256"] = checksum
+    validated["snapshot_path"] = str(snapshot_path)
+    return validated
+
+
+def build_snapshot_validation_report(
+    records: list[RawRecord],
+    metadata: dict[str, object],
+    year_start: int,
+    year_end: int,
+) -> dict[str, object]:
+    """Build a machine-readable report for the raw snapshot intake stage."""
+    years = sorted({record.year for record in records})
+    countries = sorted({record.country for record in records})
+    action_counts = Counter(record.action_code for record in records)
+    return {
+        "status": "raw_snapshot_validated",
+        "record_count": len(records),
+        "country_count": len(countries),
+        "countries": countries,
+        "year_range_requested": [year_start, year_end],
+        "years_present": years,
+        "action_counts": dict(action_counts),
+        "metadata": metadata,
+    }
 
 
 def write_snapshot_provenance(
