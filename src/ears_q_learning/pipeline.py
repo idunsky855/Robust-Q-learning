@@ -22,6 +22,7 @@ from ears_q_learning.mdp import (
     normalized_hamming_cost,
     transition_kernel,
 )
+from ears_q_learning.model_selection import run_model_selection
 from ears_q_learning.preprocessing import (
     build_country_year_panel,
     build_preprocessing_report,
@@ -254,6 +255,22 @@ def run_pipeline(config: Config) -> dict[str, object]:
         "transition_model": transition_model,
         "cost_matrix": cost_matrix.tolist(),
     }
+    training_summary = run_model_selection(
+        rows=filtered_rows,
+        training_year_end=config.data.training_year_end,
+        learning=config.learning,
+        smoothing_gamma=config.data.smoothing_gamma,
+        carbapenem_penalty=config.data.carbapenem_penalty,
+        weighting=config.data.weighting,
+        epsilon_star=epsilon_star,
+    )
+    write_json(
+        config.paths.processed_dir / "training_summary.json",
+        training_summary,
+    )
+    summary["training_summary_path"] = str(
+        config.paths.processed_dir / "training_summary.json"
+    )
     write_json(config.paths.processed_dir / "scaffold_summary.json", summary)
     write_json(run_dir / "status.json", summary)
     return summary

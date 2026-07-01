@@ -225,6 +225,7 @@ def test_pipeline_writes_preprocessing_artifacts_when_inputs_exist(tmp_path: Pat
     processed_dir = tmp_path / "data" / "processed"
     assert (processed_dir / "preprocessing_report.json").exists()
     assert (processed_dir / "state_assignments.json").exists()
+    assert (processed_dir / "training_summary.json").exists()
     transition_model = json.loads(
         (processed_dir / "transition_model.json").read_text(encoding="utf-8")
     )
@@ -329,3 +330,4 @@ def test_pipeline_accepts_three_atlas_exports(tmp_path: Path) -> None:
     assert report["record_count"] == 60
     assert report["metadata"]["source_format"] == "ecdc_atlas_long"
     assert len(report["metadata"]["snapshots"]) == 3
+    assert (tmp_path / "data" / "processed" / "training_summary.json").exists()
