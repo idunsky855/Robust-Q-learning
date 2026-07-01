@@ -14,6 +14,7 @@ from ears_q_learning.data import (
     validate_snapshot_metadata_collection,
     validate_snapshot_metadata,
 )
+from ears_q_learning.evaluation import run_policy_evaluation
 from ears_q_learning.mdp import (
     annual_state_distributions,
     calibrate_wasserstein_radius,
@@ -241,6 +242,7 @@ def run_pipeline(config: Config) -> dict[str, object]:
         config.paths.processed_dir / "transition_model.json",
         transition_model,
     )
+    learned_myopic_policy = myopic_policy(kernel, reward_bands)
     summary = {
         "status": "scaffold_completed",
         "validated_record_count": len(records),
@@ -250,7 +252,7 @@ def run_pipeline(config: Config) -> dict[str, object]:
         "evaluation_country_year_count": len(evaluation_rows),
         "thresholds": asdict(thresholds),
         "reward_bands": reward_bands,
-        "myopic_policy": myopic_policy(kernel, reward_bands).tolist(),
+        "myopic_policy": learned_myopic_policy.tolist(),
         "training_years": sorted({row.year for row in training_rows}),
         "transition_model": transition_model,
         "cost_matrix": cost_matrix.tolist(),
@@ -268,8 +270,24 @@ def run_pipeline(config: Config) -> dict[str, object]:
         config.paths.processed_dir / "training_summary.json",
         training_summary,
     )
+    evaluation_metrics = run_policy_evaluation(
+        rows=filtered_rows,
+        state_lookup=state_lookup,
+        training_summary=training_summary,
+        myopic_policy=learned_myopic_policy,
+        carbapenem_penalty=config.data.carbapenem_penalty,
+        decision_year_start=config.data.evaluation_year_start,
+        outcome_year_end=config.data.evaluation_year_end,
+    )
+    write_json(
+        config.paths.processed_dir / "evaluation_metrics.json",
+        evaluation_metrics,
+    )
     summary["training_summary_path"] = str(
         config.paths.processed_dir / "training_summary.json"
+    )
+    summary["evaluation_metrics_path"] = str(
+        config.paths.processed_dir / "evaluation_metrics.json"
     )
     write_json(config.paths.processed_dir / "scaffold_summary.json", summary)
     write_json(run_dir / "status.json", summary)

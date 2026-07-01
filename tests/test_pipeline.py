@@ -226,6 +226,7 @@ def test_pipeline_writes_preprocessing_artifacts_when_inputs_exist(tmp_path: Pat
     assert (processed_dir / "preprocessing_report.json").exists()
     assert (processed_dir / "state_assignments.json").exists()
     assert (processed_dir / "training_summary.json").exists()
+    assert (processed_dir / "evaluation_metrics.json").exists()
     transition_model = json.loads(
         (processed_dir / "transition_model.json").read_text(encoding="utf-8")
     )
