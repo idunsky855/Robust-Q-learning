@@ -3,8 +3,13 @@ project:
   random_seed: 20260627
 
 paths:
-  raw_snapshot: "data/raw/ears_net_ecoli_2015_2024.csv"
-  raw_snapshot_metadata: "data/raw/ears_net_ecoli_2015_2024.metadata.json"
+  raw_snapshots:
+    - path: "data/raw/ecdc_earsnet_ecoli_carbapenems_all_years_raw.csv"
+      metadata: "data/raw/ecdc_earsnet_ecoli_carbapenems_all_years_raw.metadata.json"
+    - path: "data/raw/ecdc_earsnet_ecoli_fluoroquinolones_all_years_raw.csv"
+      metadata: "data/raw/ecdc_earsnet_ecoli_fluoroquinolones_all_years_raw.metadata.json"
+    - path: "data/raw/ecdc_earsnet_ecoli_third_generation_cephalosporins_all_years_raw.csv"
+      metadata: "data/raw/ecdc_earsnet_ecoli_third_generation_cephalosporins_all_years_raw.metadata.json"
   processed_dir: "data/processed"
   results_dir: "results"
 

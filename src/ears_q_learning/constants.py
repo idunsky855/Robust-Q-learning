@@ -21,8 +21,11 @@ ACTIONS: tuple[ActionDefinition, ...] = (
         aliases=(
             "3gc",
             "third-generation cephalosporin",
+            "third-generation cephalosporins",
             "third generation cephalosporin",
+            "third generation cephalosporins",
             "3rd generation cephalosporin",
+            "3rd generation cephalosporins",
             "cefotaxime",
             "ceftriaxone",
             "ceftazidime",
@@ -34,6 +37,7 @@ ACTIONS: tuple[ActionDefinition, ...] = (
         aliases=(
             "fq",
             "fluoroquinolone",
+            "fluoroquinolones",
             "ciprofloxacin",
             "levofloxacin",
         ),
@@ -44,6 +48,7 @@ ACTIONS: tuple[ActionDefinition, ...] = (
         aliases=(
             "carb",
             "carbapenem",
+            "carbapenems",
             "imipenem",
             "meropenem",
             "ertapenem",

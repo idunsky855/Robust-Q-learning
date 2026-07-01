@@ -21,8 +21,9 @@ class ProjectConfig:
 class PathConfig:
     """Filesystem paths used by the pipeline."""
 
-    raw_snapshot: Path
-    raw_snapshot_metadata: Path
+    raw_snapshot: Path | None
+    raw_snapshot_metadata: Path | None
+    raw_snapshots: tuple[tuple[Path, Path], ...]
     processed_dir: Path
     results_dir: Path
 
@@ -100,9 +101,22 @@ def load_config(path: Path) -> Config:
             random_seed=int(_require(project_section, "random_seed")),
         ),
         paths=PathConfig(
-            raw_snapshot=resolve(_require(path_section, "raw_snapshot")),
-            raw_snapshot_metadata=resolve(
-                _require(path_section, "raw_snapshot_metadata")
+            raw_snapshot=(
+                resolve(path_section["raw_snapshot"])
+                if "raw_snapshot" in path_section
+                else None
+            ),
+            raw_snapshot_metadata=(
+                resolve(path_section["raw_snapshot_metadata"])
+                if "raw_snapshot_metadata" in path_section
+                else None
+            ),
+            raw_snapshots=tuple(
+                (
+                    resolve(str(snapshot["path"])),
+                    resolve(str(snapshot["metadata"])),
+                )
+                for snapshot in path_section.get("raw_snapshots", ())
             ),
             processed_dir=resolve(_require(path_section, "processed_dir")),
             results_dir=resolve(_require(path_section, "results_dir")),

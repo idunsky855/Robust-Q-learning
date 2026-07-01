@@ -4,13 +4,40 @@ from pathlib import Path
 
 import pytest
 
-from ears_q_learning.data import validate_raw_snapshot, validate_snapshot_metadata
+from ears_q_learning.data import (
+    validate_atlas_snapshot,
+    validate_raw_snapshot,
+    validate_snapshot_metadata,
+)
 
 
 def test_validate_raw_snapshot_accepts_expected_schema(sample_raw_csv: Path) -> None:
     records = validate_raw_snapshot(sample_raw_csv, "Escherichia coli", 2015, 2024)
     assert len(records) == 60
     assert {record.action_code for record in records} == {"3gc", "fq", "carb"}
+
+
+def test_validate_atlas_snapshot_consolidates_long_format(tmp_path: Path) -> None:
+    path = tmp_path / "atlas.csv"
+    path.write_text(
+        "\n".join(
+            [
+                '"HealthTopic","Population","Indicator","Unit","Time","RegionCode","RegionName","NumValue","TxtValue"',
+                '"Antimicrobial resistance","Escherichia coli|Carbapenems","R - resistant isolates, percentage","%","2014","AA","Aland",99.0,""',
+                '"Antimicrobial resistance","Escherichia coli|Carbapenems","R - resistant isolates, percentage","%","2015","AA","Aland",1.5,""',
+                '"Antimicrobial resistance","Escherichia coli|Carbapenems","Total tested isolates","N","2015","AA","Aland",100.0,""',
+                '"Antimicrobial resistance","Escherichia coli|Carbapenems","S - susceptible isolates","N","2015","AA","Aland",98.0,""',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    records = validate_atlas_snapshot(path, "Escherichia coli", 2015, 2024)
+
+    assert len(records) == 1
+    assert records[0].action_code == "carb"
+    assert records[0].resistance_percentage == 1.5
+    assert records[0].tested_count == 100
 
 
 def test_validate_raw_snapshot_rejects_duplicates(tmp_path: Path) -> None:

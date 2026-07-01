@@ -39,6 +39,21 @@ REQUIRED_METADATA_FIELDS = (
     "selected_filters",
 )
 
+ATLAS_COLUMNS = {
+    "HealthTopic",
+    "Population",
+    "Indicator",
+    "Unit",
+    "Time",
+    "RegionCode",
+    "RegionName",
+    "NumValue",
+    "TxtValue",
+}
+
+ATLAS_RESISTANCE_INDICATOR = "R - resistant isolates, percentage"
+ATLAS_TESTED_INDICATOR = "Total tested isolates"
+
 
 def _normalize(text: str) -> str:
     return " ".join(text.strip().lower().replace("_", " ").split())
@@ -121,6 +136,133 @@ def validate_raw_snapshot(
     return records
 
 
+def _parse_atlas_population(population: str) -> tuple[str, str]:
+    parts = [part.strip() for part in population.split("|")]
+    if len(parts) != 2 or not all(parts):
+        raise ValueError(f"Unsupported Atlas population value: {population}")
+    return parts[0], parts[1]
+
+
+def _parse_atlas_number(value: str) -> float | None:
+    cleaned = value.strip()
+    if cleaned in {"", "-"}:
+        return None
+    return float(cleaned)
+
+
+def validate_atlas_snapshot(
+    path: Path,
+    organism: str,
+    year_start: int,
+    year_end: int,
+) -> list[RawRecord]:
+    """Validate and load one long-format ECDC Atlas antimicrobial export.
+
+    The Atlas export stores indicators as rows. This function keeps the raw file
+    unchanged and combines the resistance percentage and tested-isolate rows for
+    each country-year-antibiotic key.
+    """
+    paired: dict[tuple[str, int, str], dict[str, float]] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = set(reader.fieldnames or ())
+        missing = ATLAS_COLUMNS - fieldnames
+        if missing:
+            raise ValueError(f"Atlas CSV is missing columns: {sorted(missing)}")
+
+        for row_number, row in enumerate(reader, start=2):
+            row_organism, antibiotic = _parse_atlas_population(row["Population"])
+            if row_organism != organism:
+                continue
+            year = int(row["Time"])
+            if year < year_start or year > year_end:
+                continue
+            indicator = row["Indicator"].strip()
+            if indicator not in {ATLAS_RESISTANCE_INDICATOR, ATLAS_TESTED_INDICATOR}:
+                continue
+            value = _parse_atlas_number(row["NumValue"])
+            if value is None:
+                continue
+            key = (
+                row["RegionName"].strip(),
+                year,
+                canonical_action(antibiotic),
+            )
+            if indicator in paired.setdefault(key, {}):
+                raise ValueError(
+                    "The Atlas snapshot contains duplicate indicator rows. "
+                    f"Row {row_number}, key {key}, indicator {indicator}."
+                )
+            paired[key][indicator] = value
+
+    records: list[RawRecord] = []
+    for (country, year, action_code), values in sorted(paired.items()):
+        if ATLAS_RESISTANCE_INDICATOR not in values or ATLAS_TESTED_INDICATOR not in values:
+            continue
+        resistance_percentage = values[ATLAS_RESISTANCE_INDICATOR]
+        if resistance_percentage < 0 or resistance_percentage > 100:
+            raise ValueError(
+                f"{country} {year} {action_code} has invalid resistance "
+                f"percentage {resistance_percentage}."
+            )
+        tested_count = int(values[ATLAS_TESTED_INDICATOR])
+        if tested_count <= 0:
+            raise ValueError(
+                f"{country} {year} {action_code} has invalid tested count "
+                f"{tested_count}."
+            )
+        records.append(
+            RawRecord(
+                country=country,
+                year=year,
+                organism=organism,
+                action_code=action_code,
+                resistance_percentage=resistance_percentage,
+                tested_count=tested_count,
+            )
+        )
+
+    duplicate_counts = Counter(
+        (record.country, record.year, record.action_code) for record in records
+    )
+    duplicates = [key for key, count in duplicate_counts.items() if count > 1]
+    if duplicates:
+        raise ValueError(
+            "The Atlas snapshot contains duplicate country-year-action rows. "
+            f"Examples: {duplicates[:3]}"
+        )
+    return records
+
+
+def validate_atlas_snapshots(
+    paths: Iterable[Path],
+    organism: str,
+    year_start: int,
+    year_end: int,
+) -> list[RawRecord]:
+    """Validate multiple Atlas exports and return one canonical raw record list."""
+    records: list[RawRecord] = []
+    for path in paths:
+        records.extend(
+            validate_atlas_snapshot(
+                path=path,
+                organism=organism,
+                year_start=year_start,
+                year_end=year_end,
+            )
+        )
+    duplicate_counts = Counter(
+        (record.country, record.year, record.action_code) for record in records
+    )
+    duplicates = [key for key, count in duplicate_counts.items() if count > 1]
+    if duplicates:
+        raise ValueError(
+            "The Atlas exports overlap on country-year-action rows. "
+            f"Examples: {duplicates[:3]}"
+        )
+    return records
+
+
 def load_snapshot_metadata(path: Path) -> dict[str, object]:
     """Load raw-snapshot metadata from a JSON sidecar."""
     with path.open("r", encoding="utf-8") as handle:
@@ -148,7 +290,10 @@ def validate_snapshot_metadata(
         raise ValueError("Snapshot metadata field 'selected_filters' must be an object.")
     checksum = sha256_file(snapshot_path)
     recorded_checksum = payload.get("sha256")
-    if recorded_checksum is not None and recorded_checksum != checksum:
+    if (
+        recorded_checksum is not None
+        and str(recorded_checksum).lower() != checksum.lower()
+    ):
         raise ValueError(
             "Snapshot metadata checksum does not match the current raw file. "
             f"Recorded: {recorded_checksum}; current: {checksum}."
@@ -157,6 +302,16 @@ def validate_snapshot_metadata(
     validated["sha256"] = checksum
     validated["snapshot_path"] = str(snapshot_path)
     return validated
+
+
+def validate_snapshot_metadata_collection(
+    snapshots: Iterable[tuple[Path, Path]],
+) -> list[dict[str, object]]:
+    """Validate provenance metadata for a collection of raw snapshot files."""
+    return [
+        validate_snapshot_metadata(snapshot_path=snapshot_path, metadata_path=metadata_path)
+        for snapshot_path, metadata_path in snapshots
+    ]
 
 
 def build_snapshot_validation_report(

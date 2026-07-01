@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from ears_q_learning.config import load_config
+from ears_q_learning.reproducibility import sha256_file
 from ears_q_learning.pipeline import run_pipeline
 
 
@@ -233,3 +234,98 @@ def test_pipeline_writes_preprocessing_artifacts_when_inputs_exist(tmp_path: Pat
         abs(sum(row) - 1.0) < 1e-12
         for row in transition_model["reference_kernel"]
     )
+
+
+def test_pipeline_accepts_three_atlas_exports(tmp_path: Path) -> None:
+    raw_dir = tmp_path / "data" / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    antibiotic_exports = {
+        "carb": ("Carbapenems", 0.0),
+        "fq": ("Fluoroquinolones", 20.0),
+        "3gc": ("Third-generation cephalosporins", 10.0),
+    }
+    snapshot_entries: list[str] = []
+    for index, (code, (label, base_resistance)) in enumerate(antibiotic_exports.items()):
+        path = raw_dir / f"{code}.csv"
+        lines = [
+            '"HealthTopic","Population","Indicator","Unit","Time","RegionCode","RegionName","NumValue","TxtValue"'
+        ]
+        for country_code, country_offset in {"AA": 0.0, "BB": 2.0}.items():
+            country = "Aland" if country_code == "AA" else "Borduria"
+            for year in range(2015, 2025):
+                resistance = base_resistance + country_offset + (year - 2015)
+                tested = 100 + index + (year - 2015)
+                lines.extend(
+                    [
+                        f'"Antimicrobial resistance","Escherichia coli|{label}","R - resistant isolates, percentage","%","{year}","{country_code}","{country}",{resistance:.1f},""',
+                        f'"Antimicrobial resistance","Escherichia coli|{label}","Total tested isolates","N","{year}","{country_code}","{country}",{tested:.1f},""',
+                    ]
+                )
+        path.write_text("\n".join(lines), encoding="utf-8")
+        metadata_path = raw_dir / f"{code}.metadata.json"
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "source_url": "https://atlas.ecdc.europa.eu/public/",
+                    "retrieval_date": "2026-07-01",
+                    "selected_filters": {"subpopulation": label},
+                    "sha256": sha256_file(path),
+                }
+            ),
+            encoding="utf-8",
+        )
+        snapshot_entries.extend(
+            [
+                f"    - path: data/raw/{code}.csv",
+                f"      metadata: data/raw/{code}.metadata.json",
+            ]
+        )
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "project:",
+                "  name: Test",
+                "  random_seed: 1",
+                "paths:",
+                "  raw_snapshots:",
+                *snapshot_entries,
+                "  processed_dir: data/processed",
+                "  results_dir: results",
+                "data:",
+                "  organism: Escherichia coli",
+                "  training_year_start: 2015",
+                "  training_year_end: 2019",
+                "  evaluation_year_start: 2020",
+                "  evaluation_year_end: 2024",
+                "  minimum_training_transitions: 3",
+                "  minimum_evaluation_transitions: 2",
+                "  carbapenem_penalty: 0.1",
+                "  smoothing_gamma: 0.1",
+                "  weighting: equal",
+                "learning:",
+                "  discount_grid: [0.3]",
+                "  exploration_grid: [0.1]",
+                "  updates: 10",
+                "  q_norm: 1",
+                "  epsilon_multipliers: [1.0]",
+                "  tuning_seeds: [1]",
+                "  final_seeds: [2]",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_pipeline(load_config(config_path))
+
+    assert result["status"] == "scaffold_completed"
+    report = json.loads(
+        (tmp_path / "data" / "processed" / "raw_snapshot_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert report["record_count"] == 60
+    assert report["metadata"]["source_format"] == "ecdc_atlas_long"
+    assert len(report["metadata"]["snapshots"]) == 3

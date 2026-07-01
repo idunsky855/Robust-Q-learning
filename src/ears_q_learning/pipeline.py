@@ -9,7 +9,9 @@ from pathlib import Path
 from ears_q_learning.config import Config
 from ears_q_learning.data import (
     build_snapshot_validation_report,
+    validate_atlas_snapshots,
     validate_raw_snapshot,
+    validate_snapshot_metadata_collection,
     validate_snapshot_metadata,
 )
 from ears_q_learning.mdp import (
@@ -51,7 +53,68 @@ def run_pipeline(config: Config) -> dict[str, object]:
     metadata = build_run_metadata(config, run_dir)
     write_json(run_dir / "run_metadata.json", metadata)
 
-    if not config.paths.raw_snapshot.exists():
+    if config.paths.raw_snapshots:
+        missing_snapshots = [
+            str(snapshot_path)
+            for snapshot_path, _metadata_path in config.paths.raw_snapshots
+            if not snapshot_path.exists()
+        ]
+        if missing_snapshots:
+            placeholder = {
+                "status": "blocked_missing_raw_snapshot",
+                "message": (
+                    "One or more raw ECDC Atlas exports are missing. Place the "
+                    "unchanged CSV files at the configured paths and rerun the "
+                    "pipeline."
+                ),
+                "expected_paths": missing_snapshots,
+            }
+            write_json(run_dir / "status.json", placeholder)
+            return placeholder
+
+        missing_metadata = [
+            str(metadata_path)
+            for _snapshot_path, metadata_path in config.paths.raw_snapshots
+            if not metadata_path.exists()
+        ]
+        if missing_metadata:
+            placeholder = {
+                "status": "blocked_missing_raw_snapshot_metadata",
+                "message": (
+                    "One or more raw ECDC Atlas metadata sidecars are missing. "
+                    "Add the JSON provenance files and rerun the pipeline."
+                ),
+                "expected_metadata_paths": missing_metadata,
+            }
+            write_json(run_dir / "status.json", placeholder)
+            return placeholder
+
+        metadata_payload: dict[str, object] = {
+            "source_format": "ecdc_atlas_long",
+            "snapshots": validate_snapshot_metadata_collection(
+                config.paths.raw_snapshots
+            ),
+        }
+        records = validate_atlas_snapshots(
+            paths=[
+                snapshot_path
+                for snapshot_path, _metadata_path in config.paths.raw_snapshots
+            ],
+            organism=config.data.organism,
+            year_start=config.data.training_year_start,
+            year_end=config.data.evaluation_year_end,
+        )
+    elif config.paths.raw_snapshot is None:
+        placeholder = {
+            "status": "blocked_missing_raw_snapshot",
+            "message": (
+                "No raw EARS-Net snapshot path is configured. Provide either "
+                "'raw_snapshot' or 'raw_snapshots' in the paths section."
+            ),
+        }
+        write_json(run_dir / "status.json", placeholder)
+        return placeholder
+    elif not config.paths.raw_snapshot.exists():
         placeholder = {
             "status": "blocked_missing_raw_snapshot",
             "message": (
@@ -63,8 +126,18 @@ def run_pipeline(config: Config) -> dict[str, object]:
         }
         write_json(run_dir / "status.json", placeholder)
         return placeholder
-
-    if not config.paths.raw_snapshot_metadata.exists():
+    elif config.paths.raw_snapshot_metadata is None:
+        placeholder = {
+            "status": "blocked_missing_raw_snapshot_metadata",
+            "message": (
+                "The raw EARS-Net snapshot path is configured, but the required "
+                "metadata sidecar path is not configured."
+            ),
+            "snapshot_path": str(config.paths.raw_snapshot),
+        }
+        write_json(run_dir / "status.json", placeholder)
+        return placeholder
+    elif not config.paths.raw_snapshot_metadata.exists():
         placeholder = {
             "status": "blocked_missing_raw_snapshot_metadata",
             "message": (
@@ -76,18 +149,17 @@ def run_pipeline(config: Config) -> dict[str, object]:
         }
         write_json(run_dir / "status.json", placeholder)
         return placeholder
-
-    metadata_payload = validate_snapshot_metadata(
-        snapshot_path=config.paths.raw_snapshot,
-        metadata_path=config.paths.raw_snapshot_metadata,
-    )
-
-    records = validate_raw_snapshot(
-        path=config.paths.raw_snapshot,
-        organism=config.data.organism,
-        year_start=config.data.training_year_start,
-        year_end=config.data.evaluation_year_end,
-    )
+    else:
+        metadata_payload = validate_snapshot_metadata(
+            snapshot_path=config.paths.raw_snapshot,
+            metadata_path=config.paths.raw_snapshot_metadata,
+        )
+        records = validate_raw_snapshot(
+            path=config.paths.raw_snapshot,
+            organism=config.data.organism,
+            year_start=config.data.training_year_start,
+            year_end=config.data.evaluation_year_end,
+        )
     snapshot_report = build_snapshot_validation_report(
         records=records,
         metadata=metadata_payload,

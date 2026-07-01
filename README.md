@@ -52,20 +52,22 @@ Install the package in a Python 3.11 or newer environment, then run:
 python -m ears_q_learning run --config configs/primary.yaml
 ```
 
-If the raw EARS-Net CSV has not yet been placed in `data/raw/`, the command writes a machine-readable blocked status instead of failing silently. Once the snapshot exists, the scaffold validates the raw file and writes summary artifacts for the first modeling slice.
+If the raw EARS-Net CSV exports have not yet been placed in `data/raw/`, the command writes a machine-readable blocked status instead of failing silently. Once the snapshots exist, the scaffold validates the raw files and writes summary artifacts for the first modeling slice.
 
 ## Raw Snapshot Workflow
 
-1. Export one EARS-Net CSV covering *Escherichia coli*, 2015 through 2024, resistance percentages, and tested-isolate counts for third-generation cephalosporins, fluoroquinolones, and carbapenems.
-2. Place the CSV at `data/raw/ears_net_ecoli_2015_2024.csv` without editing the file contents.
-3. Create the JSON provenance sidecar at `data/raw/ears_net_ecoli_2015_2024.metadata.json` with the source URL, retrieval date, selected filters, and checksum.
-4. Run `python -m ears_q_learning run --config configs/primary.yaml`.
+1. In the ECDC Surveillance Atlas, select antimicrobial resistance, *Escherichia coli*, one antibiotic class, and the `R - resistant isolates, percentage` indicator.
+2. Use the export dialog with all time periods, all regions, all indicators in the current table, and CSV file format.
+3. Repeat the export for carbapenems, fluoroquinolones, and third-generation cephalosporins.
+4. Place the unchanged CSV exports in `data/raw/` using the paths configured in `configs/primary.yaml`.
+5. Create one JSON provenance sidecar beside each CSV with the source URL, retrieval date, selected filters, and checksum.
+6. Run `python -m ears_q_learning run --config configs/primary.yaml`.
 
-The pipeline now requires both the raw CSV and the metadata sidecar. When they are present, it writes a machine-readable `raw_snapshot_report.json` intake report before any modeling logic proceeds.
+The pipeline requires every configured raw CSV and metadata sidecar. It consolidates the long-format Atlas exports into the canonical country-year-antibiotic schema in code, leaving the downloaded files unchanged. When the raw inputs are present, it writes a machine-readable `raw_snapshot_report.json` intake report before any modeling logic proceeds.
 
 ## Data Basis
 
-The intended raw input is one EARS-Net export covering *E. coli* resistance percentages and tested-isolate counts for:
+The intended raw input is three ECDC Atlas exports covering *E. coli* resistance percentages and tested-isolate counts for:
 
 - third-generation cephalosporins;
 - fluoroquinolones;
