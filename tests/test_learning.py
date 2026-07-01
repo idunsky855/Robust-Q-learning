@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from ears_q_learning.learning import train_q_learning
+from ears_q_learning.learning import (
+    train_classical_q_learning,
+    train_q_learning,
+    train_robust_q_learning,
+)
 from ears_q_learning.mdp import myopic_policy, normalized_hamming_cost
 
 
@@ -49,3 +53,61 @@ def test_training_is_deterministic_for_identical_seed() -> None:
     first = train_q_learning(**kwargs)
     second = train_q_learning(**kwargs)
     assert np.allclose(first.q_values, second.q_values)
+
+
+def test_first_visit_learning_rate_uses_full_target() -> None:
+    kernel = np.zeros((8, 8), dtype=float)
+    kernel[:, 0] = 1.0
+    reward_bands = {
+        "3gc": {0: 1.0, 1: 0.0},
+        "fq": {0: 0.5, 1: 0.5},
+        "carb": {0: 0.4, 1: 0.4},
+    }
+
+    result = train_classical_q_learning(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.0,
+        exploration_rate=0.0,
+        updates=1,
+        seed=3,
+        cost_matrix=normalized_hamming_cost(),
+    )
+
+    assert result.visits.sum() == 1.0
+    assert result.q_values.max() == 1.0
+
+
+def test_robust_q_learning_reproduces_coin_toss_style_caution() -> None:
+    kernel = np.zeros((8, 8), dtype=float)
+    kernel[:, 0] = 0.75
+    kernel[:, 4] = 0.25
+    reward_bands = {
+        "3gc": {0: 1.0, 1: 0.0},
+        "fq": {0: 0.65, 1: 0.65},
+        "carb": {0: 0.4, 1: 0.4},
+    }
+    cost_matrix = normalized_hamming_cost()
+
+    classical = train_classical_q_learning(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.0,
+        exploration_rate=0.1,
+        updates=50000,
+        seed=11,
+        cost_matrix=cost_matrix,
+    )
+    robust = train_robust_q_learning(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.0,
+        exploration_rate=0.1,
+        updates=50000,
+        seed=11,
+        robust_epsilon=0.1,
+        cost_matrix=cost_matrix,
+    )
+
+    assert set(classical.greedy_policy) == {0}
+    assert set(robust.greedy_policy) == {1}

@@ -166,6 +166,78 @@ def robust_lower_expectation_dual(
     return best
 
 
+def robust_lower_expectation_primal_lp(
+    reference_distribution: np.ndarray,
+    values: np.ndarray,
+    epsilon: float,
+    cost_matrix: np.ndarray,
+) -> float:
+    """Solve the finite robust lower-expectation primal by LP vertex search.
+
+    This exact helper is intended for small mathematical checks. It enumerates
+    basic feasible solutions of the transport LP with an added budget slack:
+    transport rows sum to the reference distribution, transport cost plus slack
+    equals the Wasserstein radius, and the objective is destination-state value.
+    """
+    reference_distribution = np.asarray(reference_distribution, dtype=float)
+    values = np.asarray(values, dtype=float)
+    cost_matrix = np.asarray(cost_matrix, dtype=float)
+    if epsilon < 0:
+        raise ValueError("Wasserstein epsilon must be non-negative.")
+    if reference_distribution.ndim != 1 or values.ndim != 1:
+        raise ValueError("Reference distribution and values must be vectors.")
+    if len(reference_distribution) != len(values):
+        raise ValueError("Reference distribution and values must have equal length.")
+    _validate_transport_inputs(
+        reference_distribution,
+        reference_distribution.copy(),
+        cost_matrix,
+    )
+
+    state_count = len(reference_distribution)
+    transport_variable_count = state_count * state_count
+    slack_index = transport_variable_count
+    variable_count = transport_variable_count + 1
+    equality_count = state_count + 1
+
+    constraints = np.zeros((equality_count, variable_count), dtype=float)
+    rhs = np.zeros(equality_count, dtype=float)
+    for origin in range(state_count):
+        rhs[origin] = reference_distribution[origin]
+        for destination in range(state_count):
+            constraints[origin, origin * state_count + destination] = 1.0
+            constraints[-1, origin * state_count + destination] = cost_matrix[
+                origin, destination
+            ]
+    constraints[-1, slack_index] = 1.0
+    rhs[-1] = epsilon
+
+    objective = np.zeros(variable_count, dtype=float)
+    for origin in range(state_count):
+        for destination in range(state_count):
+            objective[origin * state_count + destination] = values[destination]
+
+    best = float("inf")
+    tolerance = 1e-10
+    for basis in itertools.combinations(range(variable_count), equality_count):
+        basis_matrix = constraints[:, basis]
+        try:
+            solution = np.linalg.solve(basis_matrix, rhs)
+        except np.linalg.LinAlgError:
+            continue
+        if np.any(solution < -tolerance):
+            continue
+        full_solution = np.zeros(variable_count, dtype=float)
+        full_solution[list(basis)] = np.maximum(solution, 0.0)
+        if not np.allclose(constraints @ full_solution, rhs, atol=1e-8):
+            continue
+        best = min(best, float(objective @ full_solution))
+
+    if best == float("inf"):
+        raise RuntimeError("The robust lower-expectation primal LP is infeasible.")
+    return best
+
+
 def robust_lower_expectation_primal_binary(
     reference_distribution: np.ndarray,
     values: np.ndarray,

@@ -5,6 +5,7 @@ import numpy as np
 from ears_q_learning.wasserstein import (
     robust_lower_expectation_dual,
     robust_lower_expectation_primal_binary,
+    robust_lower_expectation_primal_lp,
     wasserstein_distance,
 )
 
@@ -16,6 +17,25 @@ def test_dual_matches_binary_primal_example() -> None:
     cost = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=float)
     dual = robust_lower_expectation_dual(reference, values, epsilon, cost)
     primal = robust_lower_expectation_primal_binary(reference, values, epsilon)
+    assert abs(dual - primal) < 1e-9
+
+
+def test_dual_matches_finite_lp_primal_example() -> None:
+    reference = np.array([0.5, 0.3, 0.2], dtype=float)
+    values = np.array([0.9, 0.4, 0.1], dtype=float)
+    epsilon = 0.2
+    cost = np.array(
+        [
+            [0.0, 0.5, 1.0],
+            [0.5, 0.0, 0.5],
+            [1.0, 0.5, 0.0],
+        ],
+        dtype=float,
+    )
+
+    dual = robust_lower_expectation_dual(reference, values, epsilon, cost)
+    primal = robust_lower_expectation_primal_lp(reference, values, epsilon, cost)
+
     assert abs(dual - primal) < 1e-9
 
 
