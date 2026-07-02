@@ -8,6 +8,15 @@ from dataclasses import dataclass
 import numpy as np
 
 
+@dataclass(frozen=True)
+class RobustDualSolution:
+    """Optimizer and transformed values for a finite Wasserstein dual."""
+
+    multiplier: float
+    transformed_values: np.ndarray
+    lower_expectation: float
+
+
 @dataclass
 class _FlowEdge:
     """One mutable residual-network edge."""
@@ -158,6 +167,21 @@ def robust_lower_expectation_dual(
     Evaluating all such breakpoints in arrays avoids Python work inside every
     Q-learning update while preserving the exact finite candidate search.
     """
+    return robust_lower_expectation_dual_solution(
+        reference_distribution=reference_distribution,
+        values=values,
+        epsilon=epsilon,
+        cost_matrix=cost_matrix,
+    ).lower_expectation
+
+
+def robust_lower_expectation_dual_solution(
+    reference_distribution: np.ndarray,
+    values: np.ndarray,
+    epsilon: float,
+    cost_matrix: np.ndarray,
+) -> RobustDualSolution:
+    """Return the optimal multiplier and sampled-update transform values."""
     reference_distribution = np.asarray(reference_distribution, dtype=float)
     values = np.asarray(values, dtype=float)
     cost_matrix = np.asarray(cost_matrix, dtype=float)
@@ -188,7 +212,12 @@ def robust_lower_expectation_dual(
     )
     row_terms = np.min(affine_values, axis=2)
     objectives = row_terms @ reference_distribution - candidates * epsilon
-    return float(np.max(objectives))
+    best_index = int(np.argmax(objectives))
+    return RobustDualSolution(
+        multiplier=float(candidates[best_index]),
+        transformed_values=row_terms[best_index].copy(),
+        lower_expectation=float(objectives[best_index]),
+    )
 
 
 def robust_lower_expectation_primal_lp(

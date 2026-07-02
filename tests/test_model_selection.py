@@ -84,3 +84,7 @@ def test_final_seeded_training_reports_seed_and_state_summaries() -> None:
     assert len(output["seed_results"]) == 3
     assert len(output["state_summaries"]) == 8
     assert all("modal_action" in row for row in output["state_summaries"])
+    assert len(output["exact_bellman_reference"]["policy"]) == 8
+    assert all(
+        "bellman_sup_norm_error" in result for result in output["seed_results"]
+    )

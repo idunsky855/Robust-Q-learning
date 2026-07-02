@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from ears_q_learning.learning import (
+    solve_bellman_optimum,
     train_classical_q_learning,
     train_q_learning,
     train_robust_q_learning,
@@ -109,5 +110,67 @@ def test_robust_q_learning_reproduces_coin_toss_style_caution() -> None:
         cost_matrix=cost_matrix,
     )
 
-    assert set(classical.greedy_policy) == {0}
-    assert set(robust.greedy_policy) == {1}
+    recurrent_states = [0, 4]
+    assert set(classical.greedy_policy[recurrent_states]) == {0}
+    assert set(robust.greedy_policy[recurrent_states]) == {1}
+
+
+def test_training_follows_the_sampled_markov_trajectory() -> None:
+    kernel = np.zeros((8, 8), dtype=float)
+    for state in range(8):
+        kernel[state, (state + 1) % 8] = 1.0
+    reward_bands = {
+        "3gc": {0: 1.0, 1: 1.0},
+        "fq": {0: 0.0, 1: 0.0},
+        "carb": {0: 0.0, 1: 0.0},
+    }
+
+    result = train_classical_q_learning(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.0,
+        exploration_rate=0.0,
+        updates=3,
+        seed=5,
+        cost_matrix=normalized_hamming_cost(),
+        starting_state=0,
+    )
+
+    assert result.visits[:, 0].tolist() == [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    ]
+
+
+def test_exact_bellman_solution_is_a_reference_for_sampled_learning() -> None:
+    kernel = np.full((8, 8), 1.0 / 8.0, dtype=float)
+    reward_bands = {
+        "3gc": {0: 0.9, 1: 0.2},
+        "fq": {0: 0.6, 1: 0.4},
+        "carb": {0: 0.5, 1: 0.3},
+    }
+    cost = normalized_hamming_cost()
+    exact = solve_bellman_optimum(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.45,
+        cost_matrix=cost,
+    )
+    learned = train_classical_q_learning(
+        kernel=kernel,
+        reward_bands=reward_bands,
+        discount=0.45,
+        exploration_rate=0.2,
+        updates=100000,
+        seed=17,
+        cost_matrix=cost,
+    )
+
+    assert exact.residual <= 1e-12
+    assert np.array_equal(learned.greedy_policy, exact.greedy_policy)

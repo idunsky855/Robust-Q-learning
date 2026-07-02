@@ -4,6 +4,7 @@ import numpy as np
 
 from ears_q_learning.wasserstein import (
     robust_lower_expectation_dual,
+    robust_lower_expectation_dual_solution,
     robust_lower_expectation_primal_binary,
     robust_lower_expectation_primal_lp,
     wasserstein_distance,
@@ -88,6 +89,26 @@ def test_vectorized_dual_matches_loop_search_for_random_eight_state_inputs() -> 
         loop = _loop_dual(reference, values, epsilon, cost)
 
         assert abs(vectorized - loop) < 1e-12
+
+
+def test_dual_solution_transform_has_the_reported_expectation() -> None:
+    reference = np.array([0.5, 0.3, 0.2], dtype=float)
+    values = np.array([0.9, 0.4, 0.1], dtype=float)
+    epsilon = 0.2
+    cost = np.array(
+        [[0.0, 0.5, 1.0], [0.5, 0.0, 0.5], [1.0, 0.5, 0.0]],
+        dtype=float,
+    )
+
+    solution = robust_lower_expectation_dual_solution(
+        reference, values, epsilon, cost
+    )
+
+    sampled_expectation = (
+        reference @ solution.transformed_values
+        - epsilon * solution.multiplier
+    )
+    assert abs(sampled_expectation - solution.lower_expectation) < 1e-12
 
 
 def test_wasserstein_distance_solves_finite_transport_problem() -> None:

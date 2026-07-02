@@ -11,7 +11,9 @@ import numpy as np
 from ears_q_learning.config import LearningConfig
 from ears_q_learning.constants import ACTIONS, STATE_COUNT
 from ears_q_learning.learning import (
+    BellmanSolution,
     TrainingResult,
+    solve_bellman_optimum,
     train_classical_q_learning,
     train_robust_q_learning,
 )
@@ -277,6 +279,13 @@ def final_seeded_training(
     robust_epsilon: float,
 ) -> dict[str, object]:
     """Train final policies for all configured final seeds."""
+    exact = solve_bellman_optimum(
+        kernel=context.kernel,
+        reward_bands=context.reward_bands,
+        discount=selected.discount,
+        cost_matrix=context.cost_matrix,
+        robust_epsilon=robust_epsilon,
+    )
     seed_results: list[dict[str, object]] = []
     for seed in learning.final_seeds:
         result = _train_candidate(
@@ -294,6 +303,12 @@ def final_seeded_training(
                 "policy": result.greedy_policy.astype(int).tolist(),
                 "q_values": result.q_values.tolist(),
                 "visits": result.visits.tolist(),
+                "bellman_sup_norm_error": float(
+                    np.max(np.abs(result.q_values - exact.q_values))
+                ),
+                "policy_agreement_with_bellman": float(
+                    np.mean(result.greedy_policy == exact.greedy_policy)
+                ),
             }
         )
     return {
@@ -301,6 +316,17 @@ def final_seeded_training(
         "robust_epsilon": robust_epsilon,
         "seed_results": seed_results,
         "state_summaries": summarize_seeded_policies(seed_results),
+        "exact_bellman_reference": _bellman_summary(exact),
+    }
+
+
+def _bellman_summary(solution: BellmanSolution) -> dict[str, object]:
+    """Convert an exact Bellman solution to a machine-readable summary."""
+    return {
+        "policy": solution.greedy_policy.astype(int).tolist(),
+        "q_values": solution.q_values.tolist(),
+        "iterations": solution.iterations,
+        "residual": solution.residual,
     }
 
 
