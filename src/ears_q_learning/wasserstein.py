@@ -151,19 +151,44 @@ def robust_lower_expectation_dual(
     epsilon: float,
     cost_matrix: np.ndarray,
 ) -> float:
-    """Compute the Wasserstein-robust lower expectation by dual search."""
-    candidates = {0.0}
-    for row in range(cost_matrix.shape[0]):
-        candidates.update(_candidate_lambdas(values, cost_matrix[row, :]))
-    best = float("-inf")
-    for lam in sorted(candidates):
-        row_terms = []
-        for row in range(cost_matrix.shape[0]):
-            row_terms.append(np.min(values + lam * cost_matrix[row, :]))
-        objective = float(reference_distribution @ np.array(row_terms) - lam * epsilon)
-        if objective > best:
-            best = objective
-    return best
+    """Compute the Wasserstein-robust lower expectation by dual search.
+
+    The one-dimensional dual objective is piecewise linear. Its maximum is
+    attained at zero or where two destination-state affine terms intersect.
+    Evaluating all such breakpoints in arrays avoids Python work inside every
+    Q-learning update while preserving the exact finite candidate search.
+    """
+    reference_distribution = np.asarray(reference_distribution, dtype=float)
+    values = np.asarray(values, dtype=float)
+    cost_matrix = np.asarray(cost_matrix, dtype=float)
+    if epsilon < 0:
+        raise ValueError("Wasserstein epsilon must be non-negative.")
+    if reference_distribution.ndim != 1 or values.ndim != 1:
+        raise ValueError("Reference distribution and values must be vectors.")
+    if len(reference_distribution) != len(values):
+        raise ValueError("Reference distribution and values must have equal length.")
+    if cost_matrix.shape != (len(values), len(values)):
+        raise ValueError("Cost matrix shape must match the value vector.")
+
+    cost_differences = cost_matrix[:, :, None] - cost_matrix[:, None, :]
+    value_differences = values[None, None, :] - values[None, :, None]
+    valid = np.abs(cost_differences) >= 1e-12
+    intersections = np.divide(
+        value_differences,
+        cost_differences,
+        out=np.full_like(cost_differences, -1.0),
+        where=valid,
+    )
+    candidates = np.unique(
+        np.concatenate(([0.0], intersections[intersections >= 0.0]))
+    )
+    affine_values = (
+        values[None, None, :]
+        + candidates[:, None, None] * cost_matrix[None, :, :]
+    )
+    row_terms = np.min(affine_values, axis=2)
+    objectives = row_terms @ reference_distribution - candidates * epsilon
+    return float(np.max(objectives))
 
 
 def robust_lower_expectation_primal_lp(

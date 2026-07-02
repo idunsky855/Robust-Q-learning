@@ -10,6 +10,37 @@ from ears_q_learning.wasserstein import (
 )
 
 
+def _loop_dual(
+    reference_distribution: np.ndarray,
+    values: np.ndarray,
+    epsilon: float,
+    cost_matrix: np.ndarray,
+) -> float:
+    candidates = {0.0}
+    for row in range(len(values)):
+        for first in range(len(values)):
+            for second in range(first + 1, len(values)):
+                denominator = cost_matrix[row, first] - cost_matrix[row, second]
+                if abs(denominator) < 1e-12:
+                    continue
+                candidate = (values[second] - values[first]) / denominator
+                if candidate >= 0:
+                    candidates.add(float(candidate))
+    return max(
+        float(
+            reference_distribution
+            @ np.array(
+                [
+                    np.min(values + candidate * cost_matrix[row, :])
+                    for row in range(len(values))
+                ]
+            )
+            - candidate * epsilon
+        )
+        for candidate in candidates
+    )
+
+
 def test_dual_matches_binary_primal_example() -> None:
     reference = np.array([0.7, 0.3], dtype=float)
     values = np.array([1.0, 0.2], dtype=float)
@@ -37,6 +68,26 @@ def test_dual_matches_finite_lp_primal_example() -> None:
     primal = robust_lower_expectation_primal_lp(reference, values, epsilon, cost)
 
     assert abs(dual - primal) < 1e-9
+
+
+def test_vectorized_dual_matches_loop_search_for_random_eight_state_inputs() -> None:
+    rng = np.random.default_rng(27)
+    bits = np.array(
+        [[(state >> shift) & 1 for shift in (2, 1, 0)] for state in range(8)]
+    )
+    cost = np.mean(bits[:, None, :] != bits[None, :, :], axis=2)
+
+    for _ in range(20):
+        reference = rng.dirichlet(np.ones(8))
+        values = rng.normal(size=8)
+        epsilon = float(rng.uniform(0.001, 0.5))
+
+        vectorized = robust_lower_expectation_dual(
+            reference, values, epsilon, cost
+        )
+        loop = _loop_dual(reference, values, epsilon, cost)
+
+        assert abs(vectorized - loop) < 1e-12
 
 
 def test_wasserstein_distance_solves_finite_transport_problem() -> None:
