@@ -33,6 +33,11 @@ def _training_output(policy: list[int]) -> dict[str, object]:
             {"state": state, "modal_action": action}
             for state, action in enumerate(policy)
         ],
+        "exact_bellman_reference": {"policy": policy},
+        "convergence": {
+            "status": "policy_converged",
+            "all_seeds_match_bellman": True,
+        },
     }
 
 
@@ -79,6 +84,8 @@ def test_complete_evaluation_contains_learned_policies_and_baselines() -> None:
     assert result["decision_years"] == [2020, 2021, 2022, 2023]
     assert result["outcome_years"] == [2021, 2022, 2023, 2024]
     assert len(result["learned_policies"]) == 2
+    assert result["learned_policies"][0]["sampled_policy_role"] == "converged_policy"
+    assert "exact_bellman_policy_metrics" in result["learned_policies"][0]
     assert {item["name"] for item in result["baselines"]} == {
         "myopic",
         "fixed_3gc",

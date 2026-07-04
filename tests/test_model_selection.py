@@ -88,3 +88,8 @@ def test_final_seeded_training_reports_seed_and_state_summaries() -> None:
     assert all(
         "bellman_sup_norm_error" in result for result in output["seed_results"]
     )
+    assert output["convergence"]["status"] in {
+        "policy_converged",
+        "not_converged",
+    }
+    assert len(output["convergence"]["state_agreement"]) == 8

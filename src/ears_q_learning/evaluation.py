@@ -147,6 +147,12 @@ def _modal_policy(training_output: dict[str, object]) -> np.ndarray:
     return np.array([row["modal_action"] for row in summaries], dtype=int)
 
 
+def _exact_policy(training_output: dict[str, object]) -> np.ndarray:
+    return np.asarray(
+        training_output["exact_bellman_reference"]["policy"], dtype=int
+    )
+
+
 def _seed_endpoint_summary(
     training_output: dict[str, object],
     rows: list[CountryYearRow],
@@ -213,16 +219,31 @@ def run_policy_evaluation(
             outcome_year_end=outcome_year_end,
         )
 
-    classical_training = training_summary["classical"]
-    learned = [
-        {
-            "algorithm": "classical",
-            "robust_epsilon": 0.0,
+    def learned_evaluation(
+        algorithm: str,
+        epsilon: float,
+        training_output: dict[str, object],
+    ) -> dict[str, object]:
+        convergence = training_output["convergence"]
+        return {
+            "algorithm": algorithm,
+            "robust_epsilon": epsilon,
+            "sampled_policy_role": (
+                "descriptive_only"
+                if convergence["status"] != "policy_converged"
+                else "converged_policy"
+            ),
+            "convergence": convergence,
             "modal_policy_metrics": evaluate(
-                "classical_modal", _modal_policy(classical_training)
+                f"{algorithm}_modal_epsilon_{epsilon:g}",
+                _modal_policy(training_output),
+            ),
+            "exact_bellman_policy_metrics": evaluate(
+                f"{algorithm}_exact_bellman_epsilon_{epsilon:g}",
+                _exact_policy(training_output),
             ),
             **_seed_endpoint_summary(
-                classical_training,
+                training_output,
                 rows,
                 state_lookup,
                 carbapenem_penalty,
@@ -230,26 +251,23 @@ def run_policy_evaluation(
                 outcome_year_end,
             ),
         }
+
+    classical_training = training_summary["classical"]
+    learned = [
+        learned_evaluation(
+            algorithm="classical",
+            epsilon=0.0,
+            training_output=classical_training,
+        )
     ]
     for radius_output in training_summary["robust"]["radii"]:
         epsilon = float(radius_output["robust_epsilon"])
         learned.append(
-            {
-                "algorithm": "wasserstein_robust",
-                "robust_epsilon": epsilon,
-                "modal_policy_metrics": evaluate(
-                    f"robust_modal_epsilon_{epsilon:g}",
-                    _modal_policy(radius_output),
-                ),
-                **_seed_endpoint_summary(
-                    radius_output,
-                    rows,
-                    state_lookup,
-                    carbapenem_penalty,
-                    decision_year_start,
-                    outcome_year_end,
-                ),
-            }
+            learned_evaluation(
+                algorithm="wasserstein_robust",
+                epsilon=epsilon,
+                training_output=radius_output,
+            )
         )
 
     baselines = [evaluate("myopic", myopic_policy)]
@@ -271,6 +289,10 @@ def run_policy_evaluation(
     return {
         "status": "evaluation_completed",
         "interpretation": "descriptive_population_informed_non_causal",
+        "policy_reporting_rule": (
+            "Exact Bellman policies represent model optima. Sampled modal policies are "
+            "descriptive only unless all final seeds match the Bellman policy."
+        ),
         "decision_years": list(range(decision_year_start, outcome_year_end)),
         "outcome_years": list(range(decision_year_start + 1, outcome_year_end + 1)),
         "transition_count": len(transitions),

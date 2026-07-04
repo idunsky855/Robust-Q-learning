@@ -311,12 +311,14 @@ def final_seeded_training(
                 ),
             }
         )
+    convergence = _convergence_summary(seed_results, exact)
     return {
         "configuration": selected.__dict__,
         "robust_epsilon": robust_epsilon,
         "seed_results": seed_results,
         "state_summaries": summarize_seeded_policies(seed_results),
         "exact_bellman_reference": _bellman_summary(exact),
+        "convergence": convergence,
     }
 
 
@@ -327,6 +329,48 @@ def _bellman_summary(solution: BellmanSolution) -> dict[str, object]:
         "q_values": solution.q_values.tolist(),
         "iterations": solution.iterations,
         "residual": solution.residual,
+    }
+
+
+def _convergence_summary(
+    seed_results: list[dict[str, object]],
+    exact: BellmanSolution,
+) -> dict[str, object]:
+    """Summarize sampled-policy agreement with the exact Bellman solution."""
+    policy_agreements = [
+        float(result["policy_agreement_with_bellman"])
+        for result in seed_results
+    ]
+    q_errors = [float(result["bellman_sup_norm_error"]) for result in seed_results]
+    state_agreement: list[dict[str, object]] = []
+    for state in range(STATE_COUNT):
+        exact_action = int(exact.greedy_policy[state])
+        matching = sum(
+            int(result["policy"][state]) == exact_action for result in seed_results
+        )
+        state_agreement.append(
+            {
+                "state": state,
+                "exact_action": exact_action,
+                "exact_action_label": ACTIONS[exact_action].label,
+                "matching_seed_count": matching,
+                "seed_count": len(seed_results),
+                "agreement": matching / len(seed_results),
+            }
+        )
+    all_seeds_match = all(agreement == 1.0 for agreement in policy_agreements)
+    return {
+        "status": "policy_converged" if all_seeds_match else "not_converged",
+        "criterion": "all final-seed greedy policies match the exact Bellman policy",
+        "all_seeds_match_bellman": all_seeds_match,
+        "mean_policy_agreement": float(mean(policy_agreements)),
+        "minimum_policy_agreement": min(policy_agreements),
+        "bellman_sup_norm_error": {
+            "mean": float(mean(q_errors)),
+            "median": float(np.median(q_errors)),
+            "maximum": max(q_errors),
+        },
+        "state_agreement": state_agreement,
     }
 
 
