@@ -1,0 +1,48 @@
+project:
+  name: "EARS-Net Q-Learning: Lecturer Demonstration"
+  random_seed: 201
+
+paths:
+  raw_snapshots:
+    - path: "data/raw/ecdc_earsnet_ecoli_carbapenems_all_years_raw.csv"
+      metadata: "data/raw/ecdc_earsnet_ecoli_carbapenems_all_years_raw.metadata.json"
+    - path: "data/raw/ecdc_earsnet_ecoli_fluoroquinolones_all_years_raw.csv"
+      metadata: "data/raw/ecdc_earsnet_ecoli_fluoroquinolones_all_years_raw.metadata.json"
+    - path: "data/raw/ecdc_earsnet_ecoli_third_generation_cephalosporins_all_years_raw.csv"
+      metadata: "data/raw/ecdc_earsnet_ecoli_third_generation_cephalosporins_all_years_raw.metadata.json"
+  processed_dir: "data/processed/demo"
+  results_dir: "results/demo"
+  cost_input: "data/external/antibiotic_cost_inputs.csv"
+
+data:
+  organism: "Escherichia coli"
+  training_year_start: 2015
+  training_year_end: 2019
+  evaluation_year_start: 2020
+  evaluation_year_end: 2024
+  minimum_training_transitions: 3
+  minimum_evaluation_transitions: 2
+  carbapenem_penalty: 0.10
+  carbapenem_penalty_sensitivity: [0.10]
+  stewardship_breadth_scores:
+    3gc: 0.40
+    fq: 0.60
+    carb: 1.00
+  stewardship_beta_grid: [0.15]
+  stewardship_delta_grid: [0.10]
+  stewardship_training_scenarios:
+    - {beta: 0.15, delta: 0.10}
+  economic_gamma_grid: [0.025]
+  economic_training_scenario: {beta: 0.15, gamma: 0.025, delta: 0.10}
+  smoothing_gamma: 0.10
+  weighting: "equal"
+  weighting_sensitivity: []
+
+learning:
+  discount_grid: [0.3]
+  exploration_grid: [0.2]
+  updates: 50000
+  q_norm: 1
+  epsilon_multipliers: [0.5, 1.0, 1.5, 2.0]
+  tuning_seeds: [201]
+  final_seeds: [201]

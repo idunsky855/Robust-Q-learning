@@ -44,13 +44,29 @@ Full rolling-origin tuning, final policy evaluation, figures, and the static wal
 `-- tests/
 ```
 
-## Running The Scaffold
+## Running The Project
 
 Install the package in a Python 3.11 or newer environment, then run:
 
 ```bash
 python -m ears_q_learning run --config configs/primary.yaml
 ```
+
+The primary configuration performs the complete tuning and multi-seed analysis
+used for reported results. It is computationally expensive. For a deterministic
+lecturer demonstration using the selected parameters and one fixed seed, run:
+
+```bash
+python -m ears_q_learning run --config configs/demo.yaml
+```
+
+The demonstration retains 50,000 Q-learning updates and all four Wasserstein
+radii, but fixes the discount factor to `0.3`, exploration rate to `0.2`, and
+seed to `201`. It writes separate artifacts under `data/processed/demo/` and
+`results/demo/`. Demonstration outputs illustrate reproducibility; they are not
+the source of the reported 30-seed estimates or convergence conclusions. A
+complete demonstration run took approximately 2 minutes 30 seconds on the
+development machine; runtime depends on the lecturer's processor.
 
 If the raw EARS-Net CSV exports have not yet been placed in `data/raw/`, the command writes a machine-readable blocked status instead of failing silently. Once the snapshots exist, the scaffold validates the raw files and writes summary artifacts for the first modeling slice.
 
@@ -64,6 +80,56 @@ If the raw EARS-Net CSV exports have not yet been placed in `data/raw/`, the com
 6. Run `python -m ears_q_learning run --config configs/primary.yaml`.
 
 The pipeline requires every configured raw CSV and metadata sidecar. It consolidates the long-format Atlas exports into the canonical country-year-antibiotic schema in code, leaving the downloaded files unchanged. When the raw inputs are present, it writes a machine-readable `raw_snapshot_report.json` intake report before any modeling logic proceeds.
+
+## Penalty Sensitivity
+
+The primary analysis retains the prespecified carbapenem penalty of `0.10`. The
+configuration also defines a sensitivity grid of `0.10`, `0.15`, `0.20`, `0.25`,
+and `0.30`. For this analysis, state thresholds, the transition kernel, selected
+discount factors, and Wasserstein radii remain fixed. Exact Bellman solutions are
+used so that incomplete stochastic convergence does not obscure action-switch
+points.
+
+The pipeline writes `penalty_sensitivity.json`, `penalty_sensitivity.csv`,
+`penalty_vs_carbapenem_use.svg`, and
+`susceptibility_vs_carbapenem_use.svg` to `data/processed/`. Values other than
+`0.10` are sensitivity analyses and are not candidates for retrospective primary
+penalty selection.
+
+The tested-isolate weighting sensitivity independently re-estimates rewards,
+transition probabilities, annual drift, and the Wasserstein radius before
+repeating tuning, final training, and evaluation. It writes
+`tested_weighting_sensitivity.json` and `tested_weighting_summary.csv`. Equal
+country-transition weighting remains the primary analysis.
+
+## Stewardship Reward Scenario
+
+A secondary, non-causal scenario evaluates
+`susceptibility - beta*breadth - delta*breadth*next-state severity`. The
+prespecified breadth scores are `0.40` for third-generation cephalosporins,
+`0.60` for fluoroquinolones, and `1.00` for carbapenems. The pipeline evaluates
+the configured beta and delta grids with fixed state thresholds, transition
+kernel, discount factors, and Wasserstein radii. Results are written to
+`stewardship_reward_scenario.json`, `stewardship_reward_scenario.csv`, and
+`stewardship_reward_carbapenem_use.svg`.
+
+The two prespecified moderate and strong scenarios are also rerun through the
+complete rolling-origin tuning and 30-seed training protocol. Their seed-level
+results are stored in `stewardship_full_training.json`, with a compact comparison
+in `stewardship_full_training_summary.csv`.
+
+The breadth and future-pressure components are normative stewardship assumptions
+rather than measured causal effects. A separate economic scenario uses one
+representative parenteral product per class and 2024-2025 English NHS hospital
+purchase prices from the eMIT national database. Costs are calculated per WHO
+defined daily dose and normalized after a `log1p` transformation. These prices
+are acquisition-cost proxies, not Europe-wide treatment costs, and exclude
+administration, monitoring, length of stay, and adverse-event costs. The scenario
+writes `economic_pressure_scenario.json` and `economic_pressure_summary.csv`.
+The prespecified `beta=0.15`, `gamma=0.025`, `delta=0.10` scenario additionally
+receives independent rolling-origin tuning and complete 30-seed training.
+Seed-level diagnostics are stored in `economic_full_training.json`, with a
+compact comparison in `economic_full_training_summary.csv`.
 
 ## Data Basis
 
