@@ -80,6 +80,38 @@ def solve_bellman_optimum(
     max_iterations: int = 10000,
 ) -> BellmanSolution:
     """Solve the finite classical or Wasserstein-robust Bellman equation."""
+    action_codes = [action.code for action in ACTIONS]
+    reward_matrix = np.array(
+        [
+            [
+                state_action_reward(next_state, action_code, reward_bands)
+                for action_code in action_codes
+            ]
+            for next_state in range(STATE_COUNT)
+        ],
+        dtype=float,
+    )
+    return solve_bellman_reward_matrix(
+        kernel=kernel,
+        reward_matrix=reward_matrix,
+        discount=discount,
+        cost_matrix=cost_matrix,
+        robust_epsilon=robust_epsilon,
+        tolerance=tolerance,
+        max_iterations=max_iterations,
+    )
+
+
+def solve_bellman_reward_matrix(
+    kernel: np.ndarray,
+    reward_matrix: np.ndarray,
+    discount: float,
+    cost_matrix: np.ndarray,
+    robust_epsilon: float = 0.0,
+    tolerance: float = 1e-12,
+    max_iterations: int = 10000,
+) -> BellmanSolution:
+    """Solve a Bellman equation from next-state-by-action rewards."""
     _validate_training_inputs(
         kernel=kernel,
         discount=discount,
@@ -91,18 +123,21 @@ def solve_bellman_optimum(
     )
     if tolerance <= 0:
         raise ValueError("Bellman tolerance must be positive.")
+    if reward_matrix.shape != (STATE_COUNT, len(ACTIONS)):
+        raise ValueError("Reward matrix must have shape (8, 3).")
+    if not np.all(np.isfinite(reward_matrix)):
+        raise ValueError("Reward matrix values must be finite.")
 
     q_values = np.zeros((STATE_COUNT, len(ACTIONS)), dtype=float)
-    action_codes = [action.code for action in ACTIONS]
     residual = float("inf")
     for iteration in range(1, max_iterations + 1):
         future_values = np.max(q_values, axis=1)
         updated = np.zeros_like(q_values)
         for state in range(STATE_COUNT):
-            for action, action_code in enumerate(action_codes):
+            for action in range(len(ACTIONS)):
                 outcomes = np.array(
                     [
-                        state_action_reward(next_state, action_code, reward_bands)
+                        reward_matrix[next_state, action]
                         + discount * future_values[next_state]
                         for next_state in range(STATE_COUNT)
                     ],
@@ -145,6 +180,44 @@ def train_q_learning(
     starting_state: int = 0,
 ) -> TrainingResult:
     """Train classical or robust Q-learning along one Markov trajectory."""
+    action_codes = [action.code for action in ACTIONS]
+    reward_matrix = np.array(
+        [
+            [
+                state_action_reward(next_state, action_code, reward_bands)
+                for action_code in action_codes
+            ]
+            for next_state in range(STATE_COUNT)
+        ],
+        dtype=float,
+    )
+    return train_q_learning_reward_matrix(
+        kernel=kernel,
+        reward_matrix=reward_matrix,
+        discount=discount,
+        exploration_rate=exploration_rate,
+        updates=updates,
+        seed=seed,
+        robust_epsilon=robust_epsilon,
+        cost_matrix=cost_matrix,
+        q_norm=q_norm,
+        starting_state=starting_state,
+    )
+
+
+def train_q_learning_reward_matrix(
+    kernel: np.ndarray,
+    reward_matrix: np.ndarray,
+    discount: float,
+    exploration_rate: float,
+    updates: int,
+    seed: int,
+    robust_epsilon: float,
+    cost_matrix: np.ndarray,
+    q_norm: int = 1,
+    starting_state: int = 0,
+) -> TrainingResult:
+    """Train Q-learning from explicit next-state-by-action rewards."""
     _validate_training_inputs(
         kernel=kernel,
         discount=discount,
@@ -156,20 +229,22 @@ def train_q_learning(
     )
     if not 0 <= starting_state < STATE_COUNT:
         raise ValueError(f"Starting state must be between 0 and {STATE_COUNT - 1}.")
-    action_codes = [action.code for action in ACTIONS]
+    if reward_matrix.shape != (STATE_COUNT, len(ACTIONS)):
+        raise ValueError("Reward matrix must have shape (8, 3).")
+    if not np.all(np.isfinite(reward_matrix)):
+        raise ValueError("Reward matrix values must be finite.")
     rng = np.random.default_rng(seed)
-    q_values = np.zeros((STATE_COUNT, len(action_codes)), dtype=float)
+    q_values = np.zeros((STATE_COUNT, len(ACTIONS)), dtype=float)
     visits = np.zeros_like(q_values)
     state = starting_state
 
     for _ in range(updates):
         action = epsilon_greedy(q_values, state, exploration_rate, rng)
         next_state = int(rng.choice(np.arange(STATE_COUNT), p=kernel[state, :]))
-        action_code = action_codes[action]
         future_values = np.max(q_values, axis=1)
         outcome_values = np.array(
             [
-                state_action_reward(candidate_state, action_code, reward_bands)
+                reward_matrix[candidate_state, action]
                 + discount * future_values[candidate_state]
                 for candidate_state in range(STATE_COUNT)
             ],

@@ -4,11 +4,27 @@ import numpy as np
 
 from ears_q_learning.learning import (
     solve_bellman_optimum,
+    solve_bellman_reward_matrix,
     train_classical_q_learning,
     train_q_learning,
     train_robust_q_learning,
 )
 from ears_q_learning.mdp import myopic_policy, normalized_hamming_cost
+
+
+def test_reward_matrix_solver_accepts_explicit_next_state_rewards() -> None:
+    kernel = np.eye(8)
+    rewards = np.array(
+        [[0.8, 0.7, 0.6] for _ in range(8)], dtype=float
+    )
+    solution = solve_bellman_reward_matrix(
+        kernel=kernel,
+        reward_matrix=rewards,
+        discount=0.3,
+        cost_matrix=normalized_hamming_cost(),
+    )
+
+    assert np.array_equal(solution.greedy_policy, np.zeros(8, dtype=int))
 
 
 def test_classical_q_learning_matches_myopic_policy_in_action_independent_case() -> None:
