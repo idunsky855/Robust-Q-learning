@@ -29,6 +29,11 @@ def _summary(values: list[float]) -> dict[str, float]:
     }
 
 
+def _weighted_mean(values: list[float], weights: list[float]) -> float:
+    """Return a mean under positive, policy-independent transition weights."""
+    return float(np.average(values, weights=weights))
+
+
 def _evaluation_transitions(
     rows: list[CountryYearRow],
     decision_year_start: int,
@@ -53,12 +58,15 @@ def evaluate_policy(
     carbapenem_penalty: float,
     decision_year_start: int = 2020,
     outcome_year_end: int = 2024,
+    weighting: str = "equal",
 ) -> dict[str, object]:
     """Evaluate a state-wise policy on complete one-year-ahead transitions."""
     if policy.shape != (STATE_COUNT,):
         raise ValueError(f"Policy must contain {STATE_COUNT} state actions.")
     if np.any((policy < 0) | (policy >= len(ACTIONS))):
         raise ValueError("Policy contains an invalid action index.")
+    if weighting not in {"equal", "tested"}:
+        raise ValueError(f"Unsupported weighting scheme: {weighting}")
 
     observations: list[dict[str, object]] = []
     for current, next_row in _evaluation_transitions(
@@ -82,58 +90,73 @@ def evaluate_policy(
                 "raw_susceptibility": _susceptibility(next_row, action.code),
                 "oracle_reward": oracle_reward,
                 "regret_to_oracle": oracle_reward - adjusted_reward,
+                "weight": (
+                    1.0
+                    if weighting == "equal"
+                    else (
+                        next_row.tested_3gc
+                        + next_row.tested_fq
+                        + next_row.tested_carb
+                    )
+                    / 3.0
+                ),
             }
         )
     if not observations:
         raise ValueError("No complete evaluation transitions were found.")
 
     yearly: list[dict[str, object]] = []
-    country_rewards: dict[str, list[float]] = defaultdict(list)
+    country_rewards: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for observation in observations:
         country_rewards[str(observation["country"])].append(
-            float(observation["adjusted_reward"])
+            (float(observation["adjusted_reward"]), float(observation["weight"]))
         )
     for year in sorted({int(item["decision_year"]) for item in observations}):
         subset = [item for item in observations if item["decision_year"] == year]
+        subset_weights = [float(item["weight"]) for item in subset]
         yearly.append(
             {
                 "decision_year": year,
                 "outcome_year": year + 1,
                 "transition_count": len(subset),
-                "mean_adjusted_coverage": float(
-                    mean(float(item["adjusted_reward"]) for item in subset)
+                "mean_adjusted_coverage": _weighted_mean(
+                    [float(item["adjusted_reward"]) for item in subset], subset_weights
                 ),
-                "mean_raw_susceptibility": float(
-                    mean(float(item["raw_susceptibility"]) for item in subset)
+                "mean_raw_susceptibility": _weighted_mean(
+                    [float(item["raw_susceptibility"]) for item in subset], subset_weights
                 ),
-                "carbapenem_use_rate": float(
-                    mean(item["action"] == "carb" for item in subset)
+                "carbapenem_use_rate": _weighted_mean(
+                    [float(item["action"] == "carb") for item in subset], subset_weights
                 ),
-                "mean_regret_to_oracle": float(
-                    mean(float(item["regret_to_oracle"]) for item in subset)
+                "mean_regret_to_oracle": _weighted_mean(
+                    [float(item["regret_to_oracle"]) for item in subset], subset_weights
                 ),
             }
         )
     country_means = {
-        country: float(mean(rewards))
+        country: _weighted_mean(
+            [item[0] for item in rewards], [item[1] for item in rewards]
+        )
         for country, rewards in sorted(country_rewards.items())
     }
     worst_country = min(country_means, key=lambda country: (country_means[country], country))
+    observation_weights = [float(item["weight"]) for item in observations]
     return {
         "name": name,
         "policy": policy.astype(int).tolist(),
         "transition_count": len(observations),
-        "mean_adjusted_coverage": float(
-            mean(float(item["adjusted_reward"]) for item in observations)
+        "weighting": weighting,
+        "mean_adjusted_coverage": _weighted_mean(
+            [float(item["adjusted_reward"]) for item in observations], observation_weights
         ),
-        "mean_raw_susceptibility": float(
-            mean(float(item["raw_susceptibility"]) for item in observations)
+        "mean_raw_susceptibility": _weighted_mean(
+            [float(item["raw_susceptibility"]) for item in observations], observation_weights
         ),
-        "carbapenem_use_rate": float(
-            mean(item["action"] == "carb" for item in observations)
+        "carbapenem_use_rate": _weighted_mean(
+            [float(item["action"] == "carb") for item in observations], observation_weights
         ),
-        "mean_regret_to_oracle": float(
-            mean(float(item["regret_to_oracle"]) for item in observations)
+        "mean_regret_to_oracle": _weighted_mean(
+            [float(item["regret_to_oracle"]) for item in observations], observation_weights
         ),
         "worst_country": worst_country,
         "worst_country_reward": country_means[worst_country],
@@ -160,6 +183,7 @@ def _seed_endpoint_summary(
     carbapenem_penalty: float,
     decision_year_start: int,
     outcome_year_end: int,
+    weighting: str,
 ) -> dict[str, object]:
     seed_metrics: list[dict[str, object]] = []
     for result in training_output["seed_results"]:
@@ -171,6 +195,7 @@ def _seed_endpoint_summary(
             carbapenem_penalty=carbapenem_penalty,
             decision_year_start=decision_year_start,
             outcome_year_end=outcome_year_end,
+            weighting=weighting,
         )
         seed_metrics.append(
             {
@@ -206,6 +231,7 @@ def run_policy_evaluation(
     carbapenem_penalty: float,
     decision_year_start: int = 2020,
     outcome_year_end: int = 2024,
+    weighting: str = "equal",
 ) -> dict[str, object]:
     """Evaluate learned policies and prespecified descriptive comparators."""
     def evaluate(name: str, policy: np.ndarray) -> dict[str, object]:
@@ -217,6 +243,7 @@ def run_policy_evaluation(
             carbapenem_penalty=carbapenem_penalty,
             decision_year_start=decision_year_start,
             outcome_year_end=outcome_year_end,
+            weighting=weighting,
         )
 
     def learned_evaluation(
@@ -249,6 +276,7 @@ def run_policy_evaluation(
                 carbapenem_penalty,
                 decision_year_start,
                 outcome_year_end,
+                weighting,
             ),
         }
 
@@ -286,6 +314,15 @@ def run_policy_evaluation(
         )
         for _current, next_row in transitions
     ]
+    oracle_weights = [
+        (
+            1.0
+            if weighting == "equal"
+            else (next_row.tested_3gc + next_row.tested_fq + next_row.tested_carb)
+            / 3.0
+        )
+        for _current, next_row in transitions
+    ]
     return {
         "status": "evaluation_completed",
         "interpretation": "descriptive_population_informed_non_causal",
@@ -296,11 +333,14 @@ def run_policy_evaluation(
         "decision_years": list(range(decision_year_start, outcome_year_end)),
         "outcome_years": list(range(decision_year_start + 1, outcome_year_end + 1)),
         "transition_count": len(transitions),
+        "weighting": weighting,
         "learned_policies": learned,
         "baselines": baselines,
         "hindsight_oracle": {
             "name": "hindsight_oracle_upper_bound",
             "deployable_policy": False,
-            "mean_adjusted_coverage": float(mean(oracle_rewards)),
+            "mean_adjusted_coverage": _weighted_mean(
+                oracle_rewards, oracle_weights
+            ),
         },
     }

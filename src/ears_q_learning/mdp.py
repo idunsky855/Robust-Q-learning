@@ -27,9 +27,10 @@ def estimate_reward_bands(
     training_rows: list[CountryYearRow],
     state_lookup: dict[tuple[str, int], int],
     carbapenem_penalty: float,
+    weighting: str = "equal",
 ) -> dict[str, dict[int, float]]:
     """Estimate low-band and high-band rewards from training rows."""
-    grouped: dict[str, dict[int, list[float]]] = {
+    grouped: dict[str, dict[int, list[tuple[float, float]]]] = {
         "3gc": {0: [], 1: []},
         "fq": {0: [], 1: []},
         "carb": {0: [], 1: []},
@@ -37,16 +38,40 @@ def estimate_reward_bands(
     for row in training_rows:
         state = state_lookup[(row.country, row.year)]
         bits = state_to_bits(state)
-        grouped["3gc"][bits[0]].append(1.0 - row.resistance_3gc / 100.0)
-        grouped["fq"][bits[1]].append(1.0 - row.resistance_fq / 100.0)
-        grouped["carb"][bits[2]].append(1.0 - row.resistance_carb / 100.0)
+        if weighting == "equal":
+            weights = {"3gc": 1.0, "fq": 1.0, "carb": 1.0}
+        elif weighting == "tested":
+            weights = {
+                "3gc": float(row.tested_3gc),
+                "fq": float(row.tested_fq),
+                "carb": float(row.tested_carb),
+            }
+        else:
+            raise ValueError(f"Unsupported weighting scheme: {weighting}")
+        grouped["3gc"][bits[0]].append(
+            (1.0 - row.resistance_3gc / 100.0, weights["3gc"])
+        )
+        grouped["fq"][bits[1]].append(
+            (1.0 - row.resistance_fq / 100.0, weights["fq"])
+        )
+        grouped["carb"][bits[2]].append(
+            (1.0 - row.resistance_carb / 100.0, weights["carb"])
+        )
     rewards: dict[str, dict[int, float]] = {}
     for action, bands in grouped.items():
-        overall = [value for values in bands.values() for value in values]
-        overall_mean = float(np.mean(overall)) if overall else 0.0
+        overall = [item for values in bands.values() for item in values]
+        overall_mean = (
+            float(np.average([item[0] for item in overall], weights=[item[1] for item in overall]))
+            if overall
+            else 0.0
+        )
         rewards[action] = {}
         for band, values in bands.items():
-            reward = float(np.mean(values)) if values else overall_mean
+            reward = (
+                float(np.average([item[0] for item in values], weights=[item[1] for item in values]))
+                if values
+                else overall_mean
+            )
             if action == "carb":
                 reward -= carbapenem_penalty
             rewards[action][band] = reward
@@ -80,16 +105,26 @@ def transition_kernel(
     return kernel
 
 
-def annual_state_distributions(rows: list[CountryYearRow], state_lookup: dict[tuple[str, int], int]) -> dict[int, np.ndarray]:
+def annual_state_distributions(
+    rows: list[CountryYearRow],
+    state_lookup: dict[tuple[str, int], int],
+    weighting: str = "equal",
+) -> dict[int, np.ndarray]:
     """Compute the empirical state distribution for each year."""
-    by_year: dict[int, list[int]] = defaultdict(list)
+    by_year: dict[int, list[tuple[int, float]]] = defaultdict(list)
     for row in rows:
-        by_year[row.year].append(state_lookup[(row.country, row.year)])
+        if weighting == "equal":
+            weight = 1.0
+        elif weighting == "tested":
+            weight = (row.tested_3gc + row.tested_fq + row.tested_carb) / 3.0
+        else:
+            raise ValueError(f"Unsupported weighting scheme: {weighting}")
+        by_year[row.year].append((state_lookup[(row.country, row.year)], weight))
     distributions: dict[int, np.ndarray] = {}
     for year, states in sorted(by_year.items()):
         values = np.zeros(STATE_COUNT, dtype=float)
-        for state in states:
-            values[state] += 1.0
+        for state, weight in states:
+            values[state] += weight
         distributions[year] = values / values.sum()
     return distributions
 

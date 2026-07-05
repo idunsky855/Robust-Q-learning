@@ -84,9 +84,11 @@ def build_training_context(
     state_lookup = _state_lookup_for_rows(rows, training_year_end)
     transitions = build_transition_records(training_rows, state_lookup, weighting)
     kernel = transition_kernel(transitions, smoothing_gamma)
-    reward_bands = estimate_reward_bands(training_rows, state_lookup, carbapenem_penalty)
+    reward_bands = estimate_reward_bands(
+        training_rows, state_lookup, carbapenem_penalty, weighting
+    )
     cost_matrix = normalized_hamming_cost()
-    distributions = annual_state_distributions(training_rows, state_lookup)
+    distributions = annual_state_distributions(training_rows, state_lookup, weighting)
     try:
         epsilon_star = float(
             calibrate_wasserstein_radius(distributions, cost_matrix)["epsilon_star"]
@@ -109,11 +111,13 @@ def validation_reward(
     policy: np.ndarray,
     decision_year: int,
     carbapenem_penalty: float,
+    weighting: str = "equal",
 ) -> float:
     """Score one policy on one rolling-origin validation transition."""
     by_country_year = {(row.country, row.year): row for row in rows}
     action_codes = [action.code for action in ACTIONS]
     rewards: list[float] = []
+    weights: list[float] = []
     for current in rows:
         if current.year != decision_year:
             continue
@@ -125,9 +129,17 @@ def validation_reward(
             continue
         action_code = action_codes[int(policy[state])]
         rewards.append(observed_reward(next_row, action_code, carbapenem_penalty))
+        weights.append(
+            1.0
+            if weighting == "equal"
+            else (next_row.tested_3gc + next_row.tested_fq + next_row.tested_carb)
+            / 3.0
+        )
     if not rewards:
         raise ValueError(f"No validation transitions found for {decision_year}.")
-    return float(mean(rewards))
+    if weighting not in {"equal", "tested"}:
+        raise ValueError(f"Unsupported weighting scheme: {weighting}")
+    return float(np.average(rewards, weights=weights))
 
 
 def _train_candidate(
@@ -203,6 +215,7 @@ def tune_configuration(
                             policy=result.greedy_policy,
                             decision_year=decision_year,
                             carbapenem_penalty=carbapenem_penalty,
+                            weighting=weighting,
                         )
                     )
                 seed_fold_scores.append(float(mean(fold_scores)))

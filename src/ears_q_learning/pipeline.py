@@ -15,6 +15,11 @@ from ears_q_learning.data import (
     validate_snapshot_metadata,
 )
 from ears_q_learning.evaluation import run_policy_evaluation
+from ears_q_learning.economic_pressure import (
+    run_full_economic_training,
+    run_economic_pressure_scenario,
+    write_economic_pressure_artifacts,
+)
 from ears_q_learning.mdp import (
     annual_state_distributions,
     calibrate_wasserstein_radius,
@@ -24,6 +29,10 @@ from ears_q_learning.mdp import (
     transition_kernel,
 )
 from ears_q_learning.model_selection import run_model_selection
+from ears_q_learning.penalty_sensitivity import (
+    run_penalty_sensitivity,
+    write_penalty_sensitivity_artifacts,
+)
 from ears_q_learning.preprocessing import (
     build_country_year_panel,
     build_preprocessing_report,
@@ -35,6 +44,18 @@ from ears_q_learning.preprocessing import (
 )
 from ears_q_learning.reproducibility import build_run_metadata, ensure_directory, set_global_seed, write_json
 from ears_q_learning.state_space import encode_state, fit_thresholds
+from ears_q_learning.stewardship_reward import (
+    run_stewardship_reward_scenario,
+    write_stewardship_reward_artifacts,
+)
+from ears_q_learning.stewardship_training import (
+    run_full_stewardship_training,
+    write_full_stewardship_summary,
+)
+from ears_q_learning.weighting_sensitivity import (
+    run_weighting_sensitivity,
+    write_weighting_sensitivity_artifacts,
+)
 
 
 def _run_directory(results_dir: Path) -> Path:
@@ -216,8 +237,11 @@ def run_pipeline(config: Config) -> dict[str, object]:
         training_rows=training_rows,
         state_lookup=state_lookup,
         carbapenem_penalty=config.data.carbapenem_penalty,
+        weighting=config.data.weighting,
     )
-    state_distributions = annual_state_distributions(training_rows, state_lookup)
+    state_distributions = annual_state_distributions(
+        training_rows, state_lookup, config.data.weighting
+    )
     cost_matrix = normalized_hamming_cost()
     drift_calibration = calibrate_wasserstein_radius(
         state_distributions,
@@ -278,16 +302,175 @@ def run_pipeline(config: Config) -> dict[str, object]:
         carbapenem_penalty=config.data.carbapenem_penalty,
         decision_year_start=config.data.evaluation_year_start,
         outcome_year_end=config.data.evaluation_year_end,
+        weighting=config.data.weighting,
     )
     write_json(
         config.paths.processed_dir / "evaluation_metrics.json",
         evaluation_metrics,
+    )
+    weighting_sensitivities: list[dict[str, object]] = []
+    for alternative_weighting in config.data.weighting_sensitivity:
+        weighting_analysis = run_weighting_sensitivity(
+            rows=filtered_rows,
+            training_rows=training_rows,
+            state_lookup=state_lookup,
+            learning=config.learning,
+            training_year_end=config.data.training_year_end,
+            decision_year_start=config.data.evaluation_year_start,
+            outcome_year_end=config.data.evaluation_year_end,
+            smoothing_gamma=config.data.smoothing_gamma,
+            carbapenem_penalty=config.data.carbapenem_penalty,
+            weighting=alternative_weighting,
+        )
+        weighting_sensitivities.append(
+            {
+                "weighting": alternative_weighting,
+                "artifacts": write_weighting_sensitivity_artifacts(
+                    config.paths.processed_dir, weighting_analysis
+                ),
+            }
+        )
+    penalty_sensitivity = run_penalty_sensitivity(
+        rows=filtered_rows,
+        training_rows=training_rows,
+        state_lookup=state_lookup,
+        kernel=kernel,
+        cost_matrix=cost_matrix,
+        training_summary=training_summary,
+        primary_penalty=config.data.carbapenem_penalty,
+        penalties=config.data.carbapenem_penalty_sensitivity,
+        decision_year_start=config.data.evaluation_year_start,
+        outcome_year_end=config.data.evaluation_year_end,
+    )
+    sensitivity_paths = write_penalty_sensitivity_artifacts(
+        config.paths.processed_dir,
+        penalty_sensitivity,
+    )
+    stewardship_scenario = run_stewardship_reward_scenario(
+        rows=filtered_rows,
+        training_rows=training_rows,
+        state_lookup=state_lookup,
+        kernel=kernel,
+        cost_matrix=cost_matrix,
+        training_summary=training_summary,
+        breadth_scores=config.data.stewardship_breadth_scores,
+        beta_grid=config.data.stewardship_beta_grid,
+        delta_grid=config.data.stewardship_delta_grid,
+        decision_year_start=config.data.evaluation_year_start,
+        outcome_year_end=config.data.evaluation_year_end,
+    )
+    stewardship_paths = write_stewardship_reward_artifacts(
+        config.paths.processed_dir,
+        stewardship_scenario,
+    )
+    economic_pressure_paths: dict[str, str] | None = None
+    full_economic_path: Path | None = None
+    full_economic_summary_path: Path | None = None
+    if config.paths.cost_input is not None:
+        if not config.paths.cost_input.exists():
+            raise FileNotFoundError(
+                f"Configured cost input is missing: {config.paths.cost_input}"
+            )
+        economic_pressure = run_economic_pressure_scenario(
+            rows=filtered_rows,
+            training_rows=training_rows,
+            state_lookup=state_lookup,
+            kernel=kernel,
+            cost_matrix=cost_matrix,
+            training_summary=training_summary,
+            breadth_scores=config.data.stewardship_breadth_scores,
+            beta=0.15,
+            delta=0.10,
+            gamma_grid=config.data.economic_gamma_grid,
+            cost_input=config.paths.cost_input,
+            decision_year_start=config.data.evaluation_year_start,
+            outcome_year_end=config.data.evaluation_year_end,
+        )
+        economic_pressure_paths = write_economic_pressure_artifacts(
+            config.paths.processed_dir, economic_pressure
+        )
+        if config.data.economic_training_scenario is not None:
+            beta, gamma, delta = config.data.economic_training_scenario
+            full_economic_training = run_full_economic_training(
+                rows=filtered_rows,
+                evaluation_state_lookup=state_lookup,
+                training_year_end=config.data.training_year_end,
+                decision_year_start=config.data.evaluation_year_start,
+                outcome_year_end=config.data.evaluation_year_end,
+                learning=config.learning,
+                smoothing_gamma=config.data.smoothing_gamma,
+                weighting=config.data.weighting,
+                epsilon_star=epsilon_star,
+                breadth_scores=config.data.stewardship_breadth_scores,
+                beta=beta,
+                gamma=gamma,
+                delta=delta,
+                cost_input=config.paths.cost_input,
+            )
+            full_economic_path = (
+                config.paths.processed_dir / "economic_full_training.json"
+            )
+            write_json(full_economic_path, full_economic_training)
+            full_economic_summary_path = (
+                config.paths.processed_dir / "economic_full_training_summary.csv"
+            )
+            write_full_stewardship_summary(
+                full_economic_summary_path, full_economic_training
+            )
+    full_stewardship_training = run_full_stewardship_training(
+        rows=filtered_rows,
+        evaluation_state_lookup=state_lookup,
+        training_year_end=config.data.training_year_end,
+        decision_year_start=config.data.evaluation_year_start,
+        outcome_year_end=config.data.evaluation_year_end,
+        learning=config.learning,
+        smoothing_gamma=config.data.smoothing_gamma,
+        weighting=config.data.weighting,
+        epsilon_star=epsilon_star,
+        breadth_scores=config.data.stewardship_breadth_scores,
+        scenarios=config.data.stewardship_training_scenarios,
+    )
+    full_stewardship_path = (
+        config.paths.processed_dir / "stewardship_full_training.json"
+    )
+    write_json(full_stewardship_path, full_stewardship_training)
+    full_stewardship_summary_path = (
+        config.paths.processed_dir / "stewardship_full_training_summary.csv"
+    )
+    write_full_stewardship_summary(
+        full_stewardship_summary_path, full_stewardship_training
     )
     summary["training_summary_path"] = str(
         config.paths.processed_dir / "training_summary.json"
     )
     summary["evaluation_metrics_path"] = str(
         config.paths.processed_dir / "evaluation_metrics.json"
+    )
+    summary["weighting_sensitivities"] = weighting_sensitivities
+    summary["penalty_sensitivity"] = {
+        "primary_penalty": config.data.carbapenem_penalty,
+        "penalty_grid": list(config.data.carbapenem_penalty_sensitivity),
+        "artifacts": sensitivity_paths,
+    }
+    summary["stewardship_reward_scenario"] = {
+        "interpretation": "secondary_normative_scenario_non_causal",
+        "artifacts": stewardship_paths,
+    }
+    summary["economic_pressure_scenario"] = {
+        "interpretation": "secondary_normative_non_causal_cost_scenario",
+        "artifacts": economic_pressure_paths,
+    }
+    summary["economic_full_training_path"] = (
+        str(full_economic_path) if full_economic_path is not None else None
+    )
+    summary["economic_full_training_summary_path"] = (
+        str(full_economic_summary_path)
+        if full_economic_summary_path is not None
+        else None
+    )
+    summary["stewardship_full_training_path"] = str(full_stewardship_path)
+    summary["stewardship_full_training_summary_path"] = str(
+        full_stewardship_summary_path
     )
     write_json(config.paths.processed_dir / "scaffold_summary.json", summary)
     write_json(run_dir / "status.json", summary)

@@ -26,6 +26,7 @@ class PathConfig:
     raw_snapshots: tuple[tuple[Path, Path], ...]
     processed_dir: Path
     results_dir: Path
+    cost_input: Path | None
 
 
 @dataclass(frozen=True)
@@ -40,8 +41,16 @@ class DataConfig:
     minimum_training_transitions: int
     minimum_evaluation_transitions: int
     carbapenem_penalty: float
+    carbapenem_penalty_sensitivity: tuple[float, ...]
+    stewardship_breadth_scores: dict[str, float]
+    stewardship_beta_grid: tuple[float, ...]
+    stewardship_delta_grid: tuple[float, ...]
+    stewardship_training_scenarios: tuple[tuple[float, float], ...]
+    economic_gamma_grid: tuple[float, ...]
+    economic_training_scenario: tuple[float, float, float] | None
     smoothing_gamma: float
     weighting: str
+    weighting_sensitivity: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -120,6 +129,11 @@ def load_config(path: Path) -> Config:
             ),
             processed_dir=resolve(_require(path_section, "processed_dir")),
             results_dir=resolve(_require(path_section, "results_dir")),
+            cost_input=(
+                resolve(path_section["cost_input"])
+                if "cost_input" in path_section
+                else None
+            ),
         ),
         data=DataConfig(
             organism=_require(data_section, "organism"),
@@ -134,8 +148,51 @@ def load_config(path: Path) -> Config:
                 _require(data_section, "minimum_evaluation_transitions")
             ),
             carbapenem_penalty=float(_require(data_section, "carbapenem_penalty")),
+            carbapenem_penalty_sensitivity=tuple(
+                float(value)
+                for value in data_section.get(
+                    "carbapenem_penalty_sensitivity",
+                    (data_section["carbapenem_penalty"],),
+                )
+            ),
+            stewardship_breadth_scores={
+                str(key): float(value)
+                for key, value in data_section.get(
+                    "stewardship_breadth_scores",
+                    {"3gc": 0.4, "fq": 0.6, "carb": 1.0},
+                ).items()
+            },
+            stewardship_beta_grid=tuple(
+                float(value)
+                for value in data_section.get("stewardship_beta_grid", (0.0,))
+            ),
+            stewardship_delta_grid=tuple(
+                float(value)
+                for value in data_section.get("stewardship_delta_grid", (0.0,))
+            ),
+            stewardship_training_scenarios=tuple(
+                (float(item["beta"]), float(item["delta"]))
+                for item in data_section.get("stewardship_training_scenarios", ())
+            ),
+            economic_gamma_grid=tuple(
+                float(value)
+                for value in data_section.get("economic_gamma_grid", (0.0,))
+            ),
+            economic_training_scenario=(
+                (
+                    float(data_section["economic_training_scenario"]["beta"]),
+                    float(data_section["economic_training_scenario"]["gamma"]),
+                    float(data_section["economic_training_scenario"]["delta"]),
+                )
+                if "economic_training_scenario" in data_section
+                else None
+            ),
             smoothing_gamma=float(_require(data_section, "smoothing_gamma")),
             weighting=str(_require(data_section, "weighting")),
+            weighting_sensitivity=tuple(
+                str(value)
+                for value in data_section.get("weighting_sensitivity", ())
+            ),
         ),
         learning=LearningConfig(
             discount_grid=tuple(_require(learning_section, "discount_grid")),

@@ -1,0 +1,4 @@
+action,representative_product,atc_code,route,ddd_grams,pack_description,pack_size,weighted_average_pack_price_gbp,units_per_ddd,cost_per_ddd_gbp,source_period,source_url
+3gc,Ceftriaxone,J01DD04,parenteral,2.0,2g injection vials,10,12.118672,1,1.2118672,2024-07-01 to 2025-06-30,https://www.gov.uk/government/publications/drugs-and-pharmaceutical-electronic-market-information-emit
+fq,Ciprofloxacin,J01MA02,parenteral,0.8,400mg/200ml infusion,10,10.528428,2,2.1056856,2024-07-01 to 2025-06-30,https://www.gov.uk/government/publications/drugs-and-pharmaceutical-electronic-market-information-emit
+carb,Meropenem,J01DH02,parenteral,3.0,1g injection vials,10,18.420135,3,5.5260405,2024-07-01 to 2025-06-30,https://www.gov.uk/government/publications/drugs-and-pharmaceutical-electronic-market-information-emit

@@ -76,3 +76,17 @@ def test_reward_bands_include_carbapenem_penalty(sample_raw_csv: Path) -> None:
         carbapenem_penalty=0.1,
     )
     assert rewards["carb"][0] < 1.0
+
+
+def test_tested_weighting_changes_reward_means() -> None:
+    rows = [
+        CountryYearRow("A", 2018, 0.0, 0.0, 0.0, 10, 10, 10),
+        CountryYearRow("B", 2018, 100.0, 100.0, 100.0, 90, 90, 90),
+    ]
+    lookup = {("A", 2018): 0, ("B", 2018): 0}
+
+    equal = estimate_reward_bands(rows, lookup, 0.0, "equal")
+    tested = estimate_reward_bands(rows, lookup, 0.0, "tested")
+
+    assert equal["3gc"][0] == 0.5
+    assert tested["3gc"][0] == 0.1
