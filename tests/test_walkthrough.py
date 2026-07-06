@@ -78,3 +78,8 @@ def test_walkthrough_writes_six_figures_and_accessible_html(tmp_path: Path) -> N
     assert "Decision trail" in html
     assert "Convergence and uncertainty" in html
     assert "Reproduce the project" in html
+    assert "Worked reward example" in html
+    assert "earth-mover cost" in html
+    assert "action-independent" in html
+    assert "hindsight oracle" in html
+    assert "Bellman sup-norm error" in html
