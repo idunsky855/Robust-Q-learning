@@ -27,9 +27,7 @@ Desktop.ini
 .vscode/
 .idea/
 
-# Code artifacts
-.codex/
-.agents/
+# Local work artifacts
 .scratch/
 docs/adr/
 CONTEXT.md

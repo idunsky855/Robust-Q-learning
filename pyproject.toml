@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-  { name = "Repository contributors" }
+  { name = "Idan Dunsky", email = "idan.dunsky@s.afeka.ac.il" },
+  { name = "Yaniv Kaveh Shtul", email = "yaniv.kaveh.shtul@s.afeka.ac.il" }
 ]
 dependencies = [
   "numpy>=1.26,<3",
