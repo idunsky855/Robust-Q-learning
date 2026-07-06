@@ -73,3 +73,8 @@ def test_walkthrough_writes_six_figures_and_accessible_html(tmp_path: Path) -> N
     assert "not a clinical recommendation" in html
     assert html.count("<svg ") == 6
     assert 'src="assets/' not in html
+    assert html.count("<section ") >= 12
+    assert "State, action, transition, reward" in html
+    assert "Decision trail" in html
+    assert "Convergence and uncertainty" in html
+    assert "Reproduce the project" in html

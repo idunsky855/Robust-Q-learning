@@ -483,6 +483,7 @@ def run_pipeline(config: Config) -> dict[str, object]:
             rows=filtered_rows,
             transition_model=transition_model,
             evaluation=evaluation_metrics,
+            processed_dir=config.paths.processed_dir,
         )
         if config.paths.site_dir is not None
         else None
