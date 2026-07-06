@@ -12,16 +12,10 @@ Does a Wasserstein-robust Q-learning policy maintain better one-year-ahead adjus
 
 ## Current Status
 
-The repository now includes the first reproducible implementation slice:
-
-- a Python package with a command-line entrypoint;
-- YAML configuration for the primary experiment;
-- deterministic run metadata and artifact directory creation;
-- raw-snapshot validation and country-year state encoding;
-- action-independent transition-kernel estimation and myopic-policy summary;
-- an issue tracker and implementation PRD for the approved project scope.
-
-Full rolling-origin tuning, final policy evaluation, figures, and the static walkthrough remain in active implementation.
+The primary experiment, prespecified sensitivity analyses, final abstract,
+figures, and static research walkthrough are complete. The final primary run
+uses rolling-origin tuning, 30 fixed training seeds, four Wasserstein radii,
+exact Bellman references, and held-out 2021-2024 outcomes.
 
 ## Repository Principles
 
@@ -40,6 +34,7 @@ Full rolling-origin tuning, final policy evaluation, figures, and the static wal
 |   `-- processed/
 |-- docs/
 |-- results/
+|-- site/
 |-- src/
 `-- tests/
 ```
@@ -67,6 +62,15 @@ seed to `201`. It writes separate artifacts under `data/processed/demo/` and
 the source of the reported 30-seed estimates or convergence conclusions. A
 complete demonstration run took approximately 2 minutes 30 seconds on the
 development machine; runtime depends on the lecturer's processor.
+
+The completed static walkthrough is available at `site/index.html`. It is
+dependency-free and may be opened directly in a browser or served locally with:
+
+```bash
+python -m http.server 8000
+```
+
+Then open `http://127.0.0.1:8000/site/`.
 
 If the raw EARS-Net CSV exports have not yet been placed in `data/raw/`, the command writes a machine-readable blocked status instead of failing silently. Once the snapshots exist, the scaffold validates the raw files and writes summary artifacts for the first modeling slice.
 

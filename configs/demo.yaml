@@ -13,6 +13,7 @@ paths:
   processed_dir: "data/processed/demo"
   results_dir: "results/demo"
   cost_input: "data/external/antibiotic_cost_inputs.csv"
+  site_dir: "data/processed/demo/site"
 
 data:
   organism: "Escherichia coli"

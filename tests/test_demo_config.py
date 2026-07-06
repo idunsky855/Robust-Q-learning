@@ -14,3 +14,4 @@ def test_demo_config_fixes_selected_parameters_and_isolates_outputs() -> None:
     assert config.data.economic_training_scenario == (0.15, 0.025, 0.10)
     assert config.paths.processed_dir.name == "demo"
     assert config.paths.results_dir.name == "demo"
+    assert config.paths.site_dir.parts[-3:] == ("processed", "demo", "site")

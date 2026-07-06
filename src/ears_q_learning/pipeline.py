@@ -57,6 +57,7 @@ from ears_q_learning.weighting_sensitivity import (
     run_weighting_sensitivity,
     write_weighting_sensitivity_artifacts,
 )
+from ears_q_learning.walkthrough import write_walkthrough
 
 
 def _run_directory(results_dir: Path) -> Path:
@@ -475,6 +476,16 @@ def run_pipeline(config: Config) -> dict[str, object]:
     )
     summary["final_results_table_path"] = str(
         write_final_results_table(config.paths.processed_dir)
+    )
+    summary["walkthrough"] = (
+        write_walkthrough(
+            site_dir=config.paths.site_dir,
+            rows=filtered_rows,
+            transition_model=transition_model,
+            evaluation=evaluation_metrics,
+        )
+        if config.paths.site_dir is not None
+        else None
     )
     write_json(config.paths.processed_dir / "scaffold_summary.json", summary)
     write_json(run_dir / "status.json", summary)

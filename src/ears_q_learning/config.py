@@ -27,6 +27,7 @@ class PathConfig:
     processed_dir: Path
     results_dir: Path
     cost_input: Path | None
+    site_dir: Path | None
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,11 @@ def load_config(path: Path) -> Config:
             cost_input=(
                 resolve(path_section["cost_input"])
                 if "cost_input" in path_section
+                else None
+            ),
+            site_dir=(
+                resolve(path_section["site_dir"])
+                if "site_dir" in path_section
                 else None
             ),
         ),
