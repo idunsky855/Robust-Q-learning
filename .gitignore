@@ -14,6 +14,7 @@ env/
 # Data artifacts
 data/processed/*
 results/*
+site/
 !data/processed/.gitkeep
 !results/.gitkeep
 

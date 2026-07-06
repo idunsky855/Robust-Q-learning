@@ -34,7 +34,6 @@ exact Bellman references, and held-out 2021-2024 outcomes.
 |   `-- processed/
 |-- docs/
 |-- results/
-|-- site/
 |-- src/
 `-- tests/
 ```
@@ -125,25 +124,10 @@ runtime was 2 hours 37 minutes. Its principal outputs are:
 - `data/processed/economic_full_training.json`
 - `data/processed/stewardship_full_training.json`
 - `results/<UTC timestamp>/status.json`
-- `site/index.html` and `site/assets/*.svg`
+- locally generated walkthrough files under `site/`
 
 The demo is an execution walkthrough, not the source of the report's 30-seed
 estimates or convergence conclusions.
-
-### View The Walkthrough
-
-The committed walkthrough can be opened directly at `site/index.html`. To serve
-it locally, run either command from the repository root:
-
-```bash
-uv run --python 3.11 python -m http.server 8000
-```
-
-```bash
-python -m http.server 8000
-```
-
-Then open `http://127.0.0.1:8000/site/`. Stop the server with `Ctrl+C`.
 
 ## Included Data
 

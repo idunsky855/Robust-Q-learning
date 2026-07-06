@@ -35,7 +35,8 @@
 - External acquisition-cost data include source metadata and a checksum.
 - The pipeline writes configurations, seeds, policies, metrics, convergence
   diagnostics, figures, and the final consolidated results table.
-- The static walkthrough and six SVG figures are generated from pipeline data.
+- The static walkthrough and six SVG figures are generated locally from pipeline
+  data and excluded from version control.
 - A fresh Python 3.11 environment passes the complete test suite.
 
 ## Deliverables
@@ -43,5 +44,4 @@
 - `output/documents/EARS-Net_Q-Learning_Abstract.docx`
 - `docs/final_results.md`
 - `data/processed/final_results_table.csv` after pipeline execution
-- `site/index.html` and `site/assets/*.svg`
 - `README.md` with primary and lecturer-demonstration commands

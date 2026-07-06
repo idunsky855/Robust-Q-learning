@@ -50,7 +50,6 @@ def test_final_deliverables_match_primary_metrics() -> None:
             ROOT / "output/documents/EARS-Net_Q-Learning_Abstract.docx"
         ),
         (ROOT / "docs/final_results.md").read_text(encoding="utf-8"),
-        (ROOT / "site/index.html").read_text(encoding="utf-8"),
     )
     for text in documents:
         assert "90.13%" in text
