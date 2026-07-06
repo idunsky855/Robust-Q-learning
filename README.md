@@ -143,6 +143,7 @@ The project uses country-year data for 2015 through 2024. Export provenance, fil
 
 ## Key Documents
 
+- [Final results](docs/final_results.md)
 - [Project plan](docs/project_plan.md)
 - [Implementation PRD](docs/implementation_prd.md)
 - [Reproducibility guidelines](docs/reproducibility.md)

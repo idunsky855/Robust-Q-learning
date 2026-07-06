@@ -43,6 +43,7 @@ from ears_q_learning.preprocessing import (
     split_rows_by_period,
 )
 from ears_q_learning.reproducibility import build_run_metadata, ensure_directory, set_global_seed, write_json
+from ears_q_learning.reporting import write_final_results_table
 from ears_q_learning.state_space import encode_state, fit_thresholds
 from ears_q_learning.stewardship_reward import (
     run_stewardship_reward_scenario,
@@ -471,6 +472,9 @@ def run_pipeline(config: Config) -> dict[str, object]:
     summary["stewardship_full_training_path"] = str(full_stewardship_path)
     summary["stewardship_full_training_summary_path"] = str(
         full_stewardship_summary_path
+    )
+    summary["final_results_table_path"] = str(
+        write_final_results_table(config.paths.processed_dir)
     )
     write_json(config.paths.processed_dir / "scaffold_summary.json", summary)
     write_json(run_dir / "status.json", summary)

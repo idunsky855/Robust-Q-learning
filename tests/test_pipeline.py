@@ -236,6 +236,7 @@ def test_pipeline_writes_preprocessing_artifacts_when_inputs_exist(tmp_path: Pat
     assert (processed_dir / "stewardship_reward_carbapenem_use.svg").exists()
     assert (processed_dir / "stewardship_full_training.json").exists()
     assert (processed_dir / "stewardship_full_training_summary.csv").exists()
+    assert (processed_dir / "final_results_table.csv").exists()
     transition_model = json.loads(
         (processed_dir / "transition_model.json").read_text(encoding="utf-8")
     )
