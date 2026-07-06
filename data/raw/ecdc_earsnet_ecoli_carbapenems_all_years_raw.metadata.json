@@ -1,0 +1,18 @@
+{
+  "source": "ECDC Surveillance Atlas of Infectious Diseases",
+  "source_url": "https://atlas.ecdc.europa.eu/public/",
+  "retrieval_date": "2026-07-01",
+  "export_format": "CSV file",
+  "selected_filters": {
+    "health_topic": "Antimicrobial resistance",
+    "population": "Escherichia coli",
+    "subpopulation": "Carbapenems",
+    "indicator": "R - resistant isolates, percentage",
+    "export_scope": {
+      "time_period": "All time periods",
+      "region": "All regions",
+      "indicator_or_distribution": "All indicators in the current table"
+    }
+  },
+  "sha256": "49C945E3014BA2F227649C12FE7563254F4F217B871E9FAEEB68B6A64A437FCA"
+}

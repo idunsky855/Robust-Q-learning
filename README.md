@@ -41,49 +41,121 @@ exact Bellman references, and held-out 2021-2024 outcomes.
 
 ## Running The Project
 
-Install the package in a Python 3.11 or newer environment, then run:
+### Prerequisites
+
+- Python 3.11 or newer.
+- Approximately 250 MB of free space for the environment and generated files.
+- A CPU-based run is sufficient; the eight-state tabular model does not require
+  a GPU.
+
+The repository includes the three unchanged EARS-Net CSV exports, their
+checksum-verified metadata sidecars, and the external cost inputs required by
+both configurations. Run every command below from the repository root.
+
+### Option A: Run With uv
+
+[`uv`](https://docs.astral.sh/uv/) creates and manages the environment
+automatically. No activation or separate installation step is required.
+
+Run the deterministic lecturer demonstration:
 
 ```bash
-python -m ears_q_learning run --config configs/primary.yaml
+uv run --python 3.11 python -m ears_q_learning run --config configs/demo.yaml
 ```
 
-The primary configuration performs the complete tuning and multi-seed analysis
-used for reported results. It is computationally expensive. For a deterministic
-lecturer demonstration using the selected parameters and one fixed seed, run:
+Run the complete reported experiment:
 
 ```bash
-python -m ears_q_learning run --config configs/demo.yaml
+uv run --python 3.11 python -m ears_q_learning run --config configs/primary.yaml
 ```
 
-The demonstration retains 50,000 Q-learning updates and all four Wasserstein
-radii, but fixes the discount factor to `0.3`, exploration rate to `0.2`, and
-seed to `201`. It writes separate artifacts under `data/processed/demo/` and
-`results/demo/`. Demonstration outputs illustrate reproducibility; they are not
-the source of the reported 30-seed estimates or convergence conclusions. A
-complete demonstration run took approximately 2 minutes 30 seconds on the
-development machine; runtime depends on the lecturer's processor.
+Run the test suite:
 
-The completed static walkthrough is available at `site/index.html`. It is
-dependency-free and may be opened directly in a browser or served locally with:
+```bash
+uv run --python 3.11 --with "pytest>=8,<9" python -m pytest -q
+```
+
+### Option B: Run With Standard Python
+
+Create an isolated environment using only Python's standard `venv` module.
+
+On Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install --upgrade pip
+.venv\Scripts\python -m pip install -e ".[dev]"
+```
+
+On macOS or Linux:
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+```
+
+Then use the environment's Python executable for the required command.
+
+| Task | Windows PowerShell | macOS or Linux |
+|---|---|---|
+| Lecturer demo | `.venv\Scripts\python -m ears_q_learning run --config configs/demo.yaml` | `.venv/bin/python -m ears_q_learning run --config configs/demo.yaml` |
+| Full experiment | `.venv\Scripts\python -m ears_q_learning run --config configs/primary.yaml` | `.venv/bin/python -m ears_q_learning run --config configs/primary.yaml` |
+| Tests | `.venv\Scripts\python -m pytest -q` | `.venv/bin/python -m pytest -q` |
+
+### Demo And Full Run
+
+`configs/demo.yaml` is the recommended classroom command. It fixes the selected
+discount factor (`0.3`), exploration rate (`0.2`), and seed (`201`) while
+retaining 50,000 updates and all four Wasserstein radii. It took approximately
+two minutes on the development machine. Its outputs are isolated under:
+
+- `data/processed/demo/`
+- `results/demo/`
+- `data/processed/demo/site/`
+
+`configs/primary.yaml` reproduces the reported analysis, including rolling-origin
+hyperparameter selection, 30 final seeds, tested-isolate weighting, stewardship
+scenarios, and the cost-adjusted scenario. The verified development-machine
+runtime was 2 hours 37 minutes. Its principal outputs are:
+
+- `data/processed/training_summary.json`
+- `data/processed/evaluation_metrics.json`
+- `data/processed/final_results_table.csv`
+- `data/processed/economic_full_training.json`
+- `data/processed/stewardship_full_training.json`
+- `results/<UTC timestamp>/status.json`
+- `site/index.html` and `site/assets/*.svg`
+
+The demo is an execution walkthrough, not the source of the report's 30-seed
+estimates or convergence conclusions.
+
+### View The Walkthrough
+
+The committed walkthrough can be opened directly at `site/index.html`. To serve
+it locally, run either command from the repository root:
+
+```bash
+uv run --python 3.11 python -m http.server 8000
+```
 
 ```bash
 python -m http.server 8000
 ```
 
-Then open `http://127.0.0.1:8000/site/`.
+Then open `http://127.0.0.1:8000/site/`. Stop the server with `Ctrl+C`.
 
-If the raw EARS-Net CSV exports have not yet been placed in `data/raw/`, the command writes a machine-readable blocked status instead of failing silently. Once the snapshots exist, the scaffold validates the raw files and writes summary artifacts for the first modeling slice.
+## Included Data
 
-## Raw Snapshot Workflow
+The pipeline validates the supplied raw files before preprocessing. Each
+metadata sidecar records the ECDC Atlas source URL, retrieval date, selected
+filters, and SHA-256 checksum. To replace an export, preserve the configured
+filename and update its metadata checksum; otherwise validation will fail.
 
-1. In the ECDC Surveillance Atlas, select antimicrobial resistance, *Escherichia coli*, one antibiotic class, and the `R - resistant isolates, percentage` indicator.
-2. Use the export dialog with all time periods, all regions, all indicators in the current table, and CSV file format.
-3. Repeat the export for carbapenems, fluoroquinolones, and third-generation cephalosporins.
-4. Place the unchanged CSV exports in `data/raw/` using the paths configured in `configs/primary.yaml`.
-5. Create one JSON provenance sidecar beside each CSV with the source URL, retrieval date, selected filters, and checksum.
-6. Run `python -m ears_q_learning run --config configs/primary.yaml`.
-
-The pipeline requires every configured raw CSV and metadata sidecar. It consolidates the long-format Atlas exports into the canonical country-year-antibiotic schema in code, leaving the downloaded files unchanged. When the raw inputs are present, it writes a machine-readable `raw_snapshot_report.json` intake report before any modeling logic proceeds.
+The expected paths are listed in `configs/primary.yaml` and
+`configs/demo.yaml`. Derived data under `data/processed/` and timestamped runs
+under `results/` are intentionally excluded from Git because the commands above
+regenerate them.
 
 ## Penalty Sensitivity
 

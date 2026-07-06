@@ -1,0 +1,18 @@
+{
+  "source": "ECDC Surveillance Atlas of Infectious Diseases",
+  "source_url": "https://atlas.ecdc.europa.eu/public/",
+  "retrieval_date": "2026-07-01",
+  "export_format": "CSV file",
+  "selected_filters": {
+    "health_topic": "Antimicrobial resistance",
+    "population": "Escherichia coli",
+    "subpopulation": "Third-generation cephalosporins",
+    "indicator": "R - resistant isolates, percentage",
+    "export_scope": {
+      "time_period": "All time periods",
+      "region": "All regions",
+      "indicator_or_distribution": "All indicators in the current table"
+    }
+  },
+  "sha256": "9B979D9BF7D43E74B6F791E1C7816B8D4DC700D8B5C6DB97CE5573FC4B12C900"
+}

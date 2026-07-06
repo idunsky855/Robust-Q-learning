@@ -1,0 +1,18 @@
+{
+  "source": "ECDC Surveillance Atlas of Infectious Diseases",
+  "source_url": "https://atlas.ecdc.europa.eu/public/",
+  "retrieval_date": "2026-07-01",
+  "export_format": "CSV file",
+  "selected_filters": {
+    "health_topic": "Antimicrobial resistance",
+    "population": "Escherichia coli",
+    "subpopulation": "Fluoroquinolones",
+    "indicator": "R - resistant isolates, percentage",
+    "export_scope": {
+      "time_period": "All time periods",
+      "region": "All regions",
+      "indicator_or_distribution": "All indicators in the current table"
+    }
+  },
+  "sha256": "DCA8B5DFD4EEDC70C2D6AE748B6DB1446B8C8694E0863879CA0901C71BB48D8A"
+}

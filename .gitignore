@@ -12,10 +12,8 @@ env/
 .env
 
 # Data artifacts
-data/raw/*
 data/processed/*
 results/*
-!data/raw/.gitkeep
 !data/processed/.gitkeep
 !results/.gitkeep
 
