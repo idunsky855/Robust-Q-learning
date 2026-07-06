@@ -71,3 +71,5 @@ def test_walkthrough_writes_six_figures_and_accessible_html(tmp_path: Path) -> N
     assert "<!doctype html>" in html
     assert 'id="results"' in html
     assert "not a clinical recommendation" in html
+    assert html.count("<svg ") == 6
+    assert 'src="assets/' not in html
