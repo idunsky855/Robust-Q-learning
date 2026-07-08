@@ -1,6 +1,7 @@
 # Python cache and virtual environments
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
 env/
@@ -28,6 +29,7 @@ Desktop.ini
 
 # Local work artifacts
 .scratch/
+uv.lock
 docs/adr/
 CONTEXT.md
 docs/Robust Q-learning algorithm for Markov decision processes under Wasserstein uncertainty.pdf
